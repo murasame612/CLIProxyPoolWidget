@@ -1,0 +1,456 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		001000000000000000000001 /* CLIProxyPoolWidgetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000001 /* CLIProxyPoolWidgetApp.swift */; };
+		001000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000002 /* ContentView.swift */; };
+		001000000000000000000003 /* PoolModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000003 /* PoolModels.swift */; };
+		001000000000000000000004 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000004 /* SettingsStore.swift */; };
+		001000000000000000000005 /* PoolAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000005 /* PoolAPIClient.swift */; };
+		001000000000000000000006 /* UsageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000006 /* UsageParser.swift */; };
+		001000000000000000000007 /* PoolSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000007 /* PoolSummaryService.swift */; };
+		001000000000000000000008 /* CLIProxyPoolWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000008 /* CLIProxyPoolWidget.swift */; };
+		001000000000000000000009 /* PoolModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000003 /* PoolModels.swift */; };
+		00100000000000000000000A /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000004 /* SettingsStore.swift */; };
+		00100000000000000000000B /* PoolAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000005 /* PoolAPIClient.swift */; };
+		00100000000000000000000C /* UsageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000006 /* UsageParser.swift */; };
+		00100000000000000000000D /* PoolSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000007 /* PoolSummaryService.swift */; };
+		00100000000000000000000E /* CLIProxyPoolWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 003000000000000000000002 /* CLIProxyPoolWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		004000000000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				00100000000000000000000E /* CLIProxyPoolWidgetExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		002000000000000000000001 /* CLIProxyPoolWidgetApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIProxyPoolWidgetApp.swift; sourceTree = "<group>"; };
+		002000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		002000000000000000000003 /* PoolModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolModels.swift; sourceTree = "<group>"; };
+		002000000000000000000004 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		002000000000000000000005 /* PoolAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolAPIClient.swift; sourceTree = "<group>"; };
+		002000000000000000000006 /* UsageParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageParser.swift; sourceTree = "<group>"; };
+		002000000000000000000007 /* PoolSummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolSummaryService.swift; sourceTree = "<group>"; };
+		002000000000000000000008 /* CLIProxyPoolWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIProxyPoolWidget.swift; sourceTree = "<group>"; };
+		002000000000000000000009 /* App Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00200000000000000000000A /* Widget Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00200000000000000000000B /* CLIProxyPoolWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLIProxyPoolWidget.entitlements; sourceTree = "<group>"; };
+		00200000000000000000000C /* CLIProxyPoolWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLIProxyPoolWidgetExtension.entitlements; sourceTree = "<group>"; };
+		003000000000000000000001 /* CLIProxyPoolWidget.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CLIProxyPoolWidget.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		003000000000000000000002 /* CLIProxyPoolWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = CLIProxyPoolWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		005000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		005000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		006000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				006000000000000000000002 /* App */,
+				006000000000000000000003 /* Widget */,
+				006000000000000000000004 /* Shared */,
+				006000000000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		006000000000000000000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				002000000000000000000001 /* CLIProxyPoolWidgetApp.swift */,
+				002000000000000000000002 /* ContentView.swift */,
+				002000000000000000000009 /* App Info.plist */,
+				00200000000000000000000B /* CLIProxyPoolWidget.entitlements */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		006000000000000000000003 /* Widget */ = {
+			isa = PBXGroup;
+			children = (
+				002000000000000000000008 /* CLIProxyPoolWidget.swift */,
+				00200000000000000000000A /* Widget Info.plist */,
+				00200000000000000000000C /* CLIProxyPoolWidgetExtension.entitlements */,
+			);
+			path = Widget;
+			sourceTree = "<group>";
+		};
+		006000000000000000000004 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				002000000000000000000003 /* PoolModels.swift */,
+				002000000000000000000004 /* SettingsStore.swift */,
+				002000000000000000000005 /* PoolAPIClient.swift */,
+				002000000000000000000006 /* UsageParser.swift */,
+				002000000000000000000007 /* PoolSummaryService.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		006000000000000000000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				003000000000000000000001 /* CLIProxyPoolWidget.app */,
+				003000000000000000000002 /* CLIProxyPoolWidgetExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		007000000000000000000001 /* CLIProxyPoolWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00B000000000000000000001 /* Build configuration list for PBXNativeTarget "CLIProxyPoolWidget" */;
+			buildPhases = (
+				008000000000000000000001 /* Sources */,
+				005000000000000000000001 /* Frameworks */,
+				004000000000000000000001 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				00A000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = CLIProxyPoolWidget;
+			productName = CLIProxyPoolWidget;
+			productReference = 003000000000000000000001 /* CLIProxyPoolWidget.app */;
+			productType = "com.apple.product-type.application";
+		};
+		007000000000000000000002 /* CLIProxyPoolWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00B000000000000000000002 /* Build configuration list for PBXNativeTarget "CLIProxyPoolWidgetExtension" */;
+			buildPhases = (
+				008000000000000000000002 /* Sources */,
+				005000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CLIProxyPoolWidgetExtension;
+			productName = CLIProxyPoolWidgetExtension;
+			productReference = 003000000000000000000002 /* CLIProxyPoolWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		009000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					007000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					007000000000000000000002 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 00B000000000000000000003 /* Build configuration list for PBXProject "CLIProxyPoolWidget" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 006000000000000000000001;
+			productRefGroup = 006000000000000000000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				007000000000000000000001 /* CLIProxyPoolWidget */,
+				007000000000000000000002 /* CLIProxyPoolWidgetExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		008000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				001000000000000000000001 /* CLIProxyPoolWidgetApp.swift in Sources */,
+				001000000000000000000002 /* ContentView.swift in Sources */,
+				001000000000000000000003 /* PoolModels.swift in Sources */,
+				001000000000000000000004 /* SettingsStore.swift in Sources */,
+				001000000000000000000005 /* PoolAPIClient.swift in Sources */,
+				001000000000000000000006 /* UsageParser.swift in Sources */,
+				001000000000000000000007 /* PoolSummaryService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		008000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				001000000000000000000008 /* CLIProxyPoolWidget.swift in Sources */,
+				001000000000000000000009 /* PoolModels.swift in Sources */,
+				00100000000000000000000A /* SettingsStore.swift in Sources */,
+				00100000000000000000000B /* PoolAPIClient.swift in Sources */,
+				00100000000000000000000C /* UsageParser.swift in Sources */,
+				00100000000000000000000D /* PoolSummaryService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		00A000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 007000000000000000000002 /* CLIProxyPoolWidgetExtension */;
+			targetProxy = 00A000000000000000000002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		00A000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 009000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 007000000000000000000002;
+			remoteInfo = CLIProxyPoolWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin XCBuildConfiguration section */
+		00C000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		00C000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		00C000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget;
+				PRODUCT_NAME = CLIProxyPoolWidget;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		00C000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/CLIProxyPoolWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget;
+				PRODUCT_NAME = CLIProxyPoolWidget;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		00C000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Manual;
+				INFOPLIST_FILE = Widget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget.WidgetExtension;
+				PRODUCT_NAME = CLIProxyPoolWidgetExtension;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		00C000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Widget/CLIProxyPoolWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Widget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget.WidgetExtension;
+				PRODUCT_NAME = CLIProxyPoolWidgetExtension;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		00B000000000000000000001 /* Build configuration list for PBXNativeTarget "CLIProxyPoolWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00C000000000000000000003 /* Debug */,
+				00C000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		00B000000000000000000002 /* Build configuration list for PBXNativeTarget "CLIProxyPoolWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00C000000000000000000005 /* Debug */,
+				00C000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		00B000000000000000000003 /* Build configuration list for PBXProject "CLIProxyPoolWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00C000000000000000000001 /* Debug */,
+				00C000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 009000000000000000000001 /* Project object */;
+}
