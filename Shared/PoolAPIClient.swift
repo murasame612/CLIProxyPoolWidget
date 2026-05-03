@@ -70,12 +70,29 @@ struct PoolAPIClient {
         )
         request.httpBody = try JSONEncoder().encode(payload)
 
-        let data = try await data(for: request)
-        let response = try JSONDecoder().decode(APICallResponse.self, from: data)
-        guard (200..<300).contains(response.statusCode) else {
+        let (data, urlResponse) = try await session.data(for: request)
+        guard let http = urlResponse as? HTTPURLResponse else {
+            throw PoolAPIError.invalidResponse
+        }
+
+        let rawBody = String(data: data, encoding: .utf8) ?? ""
+        if let response = apiCallEnvelope(from: data) {
+            if (200..<300).contains(response.statusCode) {
+                return UsageParser.parse(response.body)
+            }
+            if let snapshot = quotaSnapshot(from: response.body) {
+                return snapshot
+            }
             throw PoolAPIError.httpStatus(response.statusCode, response.body)
         }
-        return UsageParser.parse(response.body)
+
+        if let snapshot = quotaSnapshot(from: rawBody) {
+            return snapshot
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw PoolAPIError.httpStatus(http.statusCode, rawBody)
+        }
+        throw PoolAPIError.invalidResponse
     }
 
     private func managementURL(path: String) throws -> URL {
@@ -103,6 +120,60 @@ struct PoolAPIClient {
         let token = settings.managementKey.trimmingCharacters(in: .whitespacesAndNewlines)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("CLIProxyPoolWidget/0.1", forHTTPHeaderField: "User-Agent")
+    }
+
+    private func quotaSnapshot(from body: String) -> UsageSnapshot? {
+        let snapshot = UsageParser.parse(body)
+        return snapshot.hasQuotaSignal ? snapshot : nil
+    }
+
+    private struct APICallEnvelope {
+        let statusCode: Int
+        let body: String
+    }
+
+    private func apiCallEnvelope(from data: Data) -> APICallEnvelope? {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any],
+              let statusCode = intValue(dictionary["status_code"] ?? dictionary["statusCode"])
+        else {
+            return nil
+        }
+
+        let body = stringBody(from: dictionary["body"] ?? dictionary["data"] ?? "")
+        return APICallEnvelope(statusCode: statusCode, body: body)
+    }
+
+    private func stringBody(from value: Any) -> String {
+        if let string = value as? String {
+            return string
+        }
+        if value is NSNull {
+            return ""
+        }
+        if JSONSerialization.isValidJSONObject(value),
+           let data = try? JSONSerialization.data(withJSONObject: value),
+           let string = String(data: data, encoding: .utf8) {
+            return string
+        }
+        return String(describing: value)
+    }
+
+    private func intValue(_ value: Any?) -> Int? {
+        switch value {
+        case let value as Int:
+            return value
+        case let value as Int64:
+            return Int(value)
+        case let value as Double:
+            return Int(value)
+        case let value as NSNumber:
+            return value.intValue
+        case let value as String:
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        default:
+            return nil
+        }
     }
 
     private func data(for request: URLRequest) async throws -> Data {

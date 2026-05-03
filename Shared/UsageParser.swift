@@ -27,6 +27,7 @@ enum UsageParser {
             return wham
         }
 
+        let bodyLowercased = body.lowercased()
         let used = firstNumber(in: pairs, matching: [
             "used", "usage", "consumed", "current", "count", "messages_used", "message_count"
         ])
@@ -37,23 +38,44 @@ enum UsageParser {
             "remaining", "available", "left", "messages_remaining"
         ])
         let reset = firstString(in: pairs, matching: [
-            "resets_at", "reset_at", "reset_time", "next_reset", "resets_after", "reset_after", "renewal"
+            "resets_at", "reset_at", "reset_time", "next_reset", "resets_after", "reset_after",
+            "reset_after_seconds", "resetafterseconds", "retry_after", "retryafter",
+            "resets_in_seconds", "reset_in_seconds", "resetsinseconds", "resetinseconds",
+            "clears_in", "clearsin", "wait_seconds", "waitseconds", "renewal"
         ])
-        let status = firstString(in: pairs, matching: ["status", "tier", "plan", "bucket"])
+        let resetSeconds = firstNumber(in: pairs, matching: [
+            "reset_after_seconds", "resets_after_seconds", "reset_after", "resets_after",
+            "resetafterseconds", "resetsafterseconds", "resetafter", "resetsafter",
+            "retry_after", "retryafter", "resets_in_seconds", "reset_in_seconds",
+            "resetsinseconds", "resetinseconds", "clears_in", "clearsin",
+            "wait_seconds", "waitseconds"
+        ]) ?? firstNumber(in: pairs, matching: [
+            "resets_at", "reset_at", "reset_time", "next_reset", "renewal"
+        ]).flatMap(secondsUntilEpoch) ?? reset.flatMap(secondsUntilReset)
+        let planType = firstString(in: pairs, matching: ["plan_type", "plan-type", "plan"])
+        let status = firstString(in: pairs, matching: ["status", "tier", "plan", "bucket", "type", "code"])
+        let statusLowercased = status?.lowercased() ?? ""
+        let looksQuotaLimited = [
+            "usage_limit_reached", "quota", "rate_limit", "rate limit", "limit", "limited",
+            "cap", "capacity", "exceeded", "too many", "try again"
+        ].contains { needle in
+            bodyLowercased.contains(needle) || statusLowercased.contains(needle)
+        }
+        let inferredPrimaryUsedPercent = looksQuotaLimited ? 100.0 : nil
 
         return UsageSnapshot(
             used: used,
             limit: limit,
             remaining: remaining,
             usedPercent: nil,
-            planType: status,
-            primaryUsedPercent: nil,
-            primaryResetSeconds: nil,
-            primaryResetText: nil,
+            planType: planType ?? (looksQuotaLimited ? nil : status),
+            primaryUsedPercent: inferredPrimaryUsedPercent,
+            primaryResetSeconds: resetSeconds,
+            primaryResetText: resetSeconds.map(formatDuration(seconds:)),
             weeklyUsedPercent: nil,
             weeklyResetSeconds: nil,
             weeklyResetText: nil,
-            resetText: reset,
+            resetText: reset ?? resetSeconds.map(formatDuration(seconds:)),
             rawStatus: status
         )
     }
@@ -67,7 +89,7 @@ enum UsageParser {
         let resetSeconds = primaryResetSeconds ?? secondaryResetSeconds
         let planType = string(at: "plan_type", in: pairs) ?? string(at: "account_plan.plan_type", in: pairs)
 
-        if usedPercent == nil && resetSeconds == nil && planType == nil {
+        if usedPercent == nil && resetSeconds == nil {
             return nil
         }
 
@@ -186,5 +208,63 @@ enum UsageParser {
             return "resets in \(minutes)m"
         }
         return "resets soon"
+    }
+
+    private static func secondsUntilReset(_ value: String) -> Double? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+
+        if let seconds = Double(trimmed) {
+            return seconds
+        }
+        if let date = DateParser.parse(trimmed) {
+            return max(0, date.timeIntervalSinceNow)
+        }
+
+        let lowercased = trimmed.lowercased()
+        var total: Double = 0
+        total += firstDurationValue(in: lowercased, unit: "d") * 86_400
+        total += firstDurationValue(in: lowercased, unit: "day") * 86_400
+        total += firstDurationValue(in: lowercased, unit: "days") * 86_400
+        total += firstDurationValue(in: lowercased, unit: "h") * 3_600
+        total += firstDurationValue(in: lowercased, unit: "hour") * 3_600
+        total += firstDurationValue(in: lowercased, unit: "hours") * 3_600
+        total += firstDurationValue(in: lowercased, unit: "m") * 60
+        total += firstDurationValue(in: lowercased, unit: "min") * 60
+        total += firstDurationValue(in: lowercased, unit: "mins") * 60
+        total += firstDurationValue(in: lowercased, unit: "minute") * 60
+        total += firstDurationValue(in: lowercased, unit: "minutes") * 60
+        total += firstDurationValue(in: lowercased, unit: "s")
+        total += firstDurationValue(in: lowercased, unit: "sec")
+        total += firstDurationValue(in: lowercased, unit: "secs")
+        total += firstDurationValue(in: lowercased, unit: "second")
+        total += firstDurationValue(in: lowercased, unit: "seconds")
+
+        return total > 0 ? total : nil
+    }
+
+    private static func secondsUntilEpoch(_ value: Double) -> Double? {
+        guard value > 0 else {
+            return nil
+        }
+        let seconds = value > 10_000_000 ? value - Date().timeIntervalSince1970 : value
+        return max(0, seconds)
+    }
+
+    private static func firstDurationValue(in text: String, unit: String) -> Double {
+        let pattern = #"(\d+(?:\.\d+)?)\s*\#(unit)\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return 0
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              let valueRange = Range(match.range(at: 1), in: text),
+              let value = Double(text[valueRange])
+        else {
+            return 0
+        }
+        return value
     }
 }

@@ -299,6 +299,18 @@ struct UsageSnapshot: Codable, Hashable {
         return nil
     }
 
+    var hasQuotaSignal: Bool {
+        used != nil ||
+        limit != nil ||
+        remaining != nil ||
+        usedPercent != nil ||
+        primaryUsedPercent != nil ||
+        primaryResetSeconds != nil ||
+        weeklyUsedPercent != nil ||
+        weeklyResetSeconds != nil ||
+        planType != nil
+    }
+
     var weeklyRemainingPercent: Double? {
         guard let weeklyUsedPercent else {
             return remaining

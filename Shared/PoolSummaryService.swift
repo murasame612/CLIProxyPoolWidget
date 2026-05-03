@@ -110,8 +110,8 @@ struct PoolSummaryService {
                 authIndex: file.authIndex,
                 name: file.displayName,
                 provider: file.normalizedProvider,
-                isAvailable: file.isAvailable,
-                statusText: statusText(for: file),
+                isAvailable: isQuotaAvailable(file: file, usage: snapshot),
+                statusText: statusText(for: file, usage: snapshot),
                 weight: client.settings.weight(for: snapshot.planType),
                 weeklyKillLinePercent: client.settings.weeklyKillLinePercent,
                 usage: snapshot,
@@ -130,6 +130,16 @@ struct PoolSummaryService {
                 error: error.localizedDescription
             )
         }
+    }
+
+    private func isQuotaAvailable(file: AuthFile, usage: UsageSnapshot) -> Bool {
+        if file.disabled {
+            return false
+        }
+        if usage.hasQuotaSignal {
+            return true
+        }
+        return file.isAvailable
     }
 
     private func makePlanBreakdown(from accounts: [AccountUsage]) -> [PlanBreakdown] {
@@ -188,7 +198,11 @@ struct PoolSummaryService {
         )
     }
 
-    private func statusText(for file: AuthFile) -> String {
+    private func statusText(for file: AuthFile, usage: UsageSnapshot? = nil) -> String {
+        if usage?.hasQuotaSignal == true,
+           file.unavailable || !file.isAvailable {
+            return "quota limited"
+        }
         if file.disabled {
             return "disabled"
         }
