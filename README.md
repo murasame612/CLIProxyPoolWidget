@@ -132,10 +132,6 @@ The widget extension supports three sizes:
 
 If the app has data but the widget does not, check App Group signing. The app and widget must share the same App Group entitlement, and the provisioning profile must allow it. Free Personal Team signing may not reliably enable App Groups for WidgetKit extensions.
 
-For debugging details, see [docs/DEBUGGING.md](docs/DEBUGGING.md).
-
-For release notes, see [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
-
 ## Settings And Privacy
 
 Settings are stored locally on the user's Mac.
@@ -321,10 +317,6 @@ Widget extension 支持三种尺寸：
 - 大号：额度、套餐分布、整体健康状态。
 
 如果主应用有数据但桌面小组件没有数据，优先检查 App Group 签名。app 和 widget 必须共享同一个 App Group entitlement，并且 provisioning profile 必须允许这个 App Group。免费 Personal Team 签名可能无法稳定启用 WidgetKit extension 的 App Groups。
-
-调试说明见 [docs/DEBUGGING.md](docs/DEBUGGING.md)。
-
-发布说明见 [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)。
 
 ## 设置与隐私
 
