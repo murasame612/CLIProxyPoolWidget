@@ -13,6 +13,10 @@ It shows a pool overview with account availability, Plus-base remaining capacity
 
 ![App overview](docs/screenshots/app-overview.png)
 
+### Medium Widget
+
+![Medium desktop widget](docs/screenshots/widget-medium.png)
+
 ## Features
 
 - Native SwiftUI macOS app and WidgetKit desktop widgets
@@ -198,6 +202,10 @@ CLIProxy Pool Watch 是一个简单的原生 macOS 应用和桌面小组件，�
 ## 概览
 
 ![应用概览](docs/screenshots/app-overview.png)
+
+### 中号桌面小组件
+
+![中号桌面小组件](docs/screenshots/widget-medium.png)
 
 ## 功能
 
