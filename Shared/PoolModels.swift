@@ -1,7 +1,7 @@
 import Foundation
 
 enum PoolWatchConstants {
-    static let appGroupID = "group.com.zipwuu.CLIProxyPoolWidget"
+    static let appGroupID = "3T3V5AFBPB.com.zipwuu.CLIProxyPoolWidget"
     static let defaultBaseURL = ""
     static let defaultRefreshMinutes = 5
     static let defaultAppRefreshSeconds = 30
@@ -226,10 +226,16 @@ struct AuthFile: Decodable, Identifiable, Hashable {
     }
 }
 
-struct RecentRequestBucket: Decodable, Hashable {
+struct RecentRequestBucket: Codable, Hashable {
     let time: String?
     let success: Int
     let failed: Int
+
+    init(time: String? = nil, success: Int, failed: Int) {
+        self.time = time
+        self.success = success
+        self.failed = failed
+    }
 }
 
 struct CodexIDToken: Decodable, Hashable {
@@ -372,6 +378,7 @@ struct AccountUsage: Codable, Identifiable, Hashable {
     let statusText: String
     let weight: Double
     let weeklyKillLinePercent: Double
+    let recentRequests: [RecentRequestBucket]
     let usage: UsageSnapshot?
     let error: String?
 
@@ -448,6 +455,17 @@ struct AccountUsage: Codable, Identifiable, Hashable {
         }
 
         return max(0, 100 - currentRemaining) * weight / 100
+    }
+
+    var weeklyResetReleasedPrimaryUnits: Double {
+        guard isAvailable,
+              isWeekKilled,
+              usage?.weeklyResetSeconds != nil,
+              let rawPrimaryRemaining = usage?.primaryRemainingPercent
+        else {
+            return 0
+        }
+        return max(0, rawPrimaryRemaining) * weight / 100
     }
 
     var weeklyResetRestoredUnits: Double {
@@ -547,6 +565,7 @@ struct PoolSummary: Codable, Hashable {
     let weeklyCapacityUnits: Double
     let nextPrimaryResetHint: QuotaResetHint?
     let nextWeeklyResetHint: QuotaResetHint?
+    let recentRequests: [RecentRequestBucket]
     let planBreakdown: [PlanBreakdown]
     let accounts: [AccountUsage]
     let errorMessage: String?
@@ -572,6 +591,7 @@ struct PoolSummary: Codable, Hashable {
         weeklyCapacityUnits: 0,
         nextPrimaryResetHint: nil,
         nextWeeklyResetHint: nil,
+        recentRequests: [],
         planBreakdown: [],
         accounts: [],
         errorMessage: nil

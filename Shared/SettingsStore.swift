@@ -29,14 +29,16 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    func syncToWidget(_ settings: PoolSettings) {
+    @discardableResult
+    func syncToWidget(_ settings: PoolSettings) -> Bool {
         saveForApp(settings)
         guard let widgetDefaults = UserDefaults(suiteName: PoolWatchConstants.appGroupID),
               let data = try? JSONEncoder().encode(settings)
         else {
-            return
+            return false
         }
         widgetDefaults.set(data, forKey: key)
+        return true
     }
 
     nonisolated static func loadForWidget() -> PoolSettings {

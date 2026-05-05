@@ -1,7 +1,10 @@
 .DS_Store
+.build/
 DerivedData/
 build/
+dist/
 *.xcuserdata/
+xcuserdata/
 *.xcuserstate
 *.moved-aside
 *.ipa
@@ -9,3 +12,7 @@ build/
 *.app.zip
 *.dSYM.zip
 *.dSYM
+__pycache__/
+*.pyc
+config.json
+usage_cache.json

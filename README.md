@@ -2,9 +2,9 @@
 
 English | [中文](#中文说明)
 
-A small native macOS app for monitoring CLIProxyAPI ChatGPT/Codex account quotas.
+A small native macOS app and desktop widget for monitoring CLIProxyAPI ChatGPT/Codex account quotas.
 
-It shows a simple pool overview with account availability, Plus-base remaining capacity, 5-hour quota, weekly quota, plan weights, and restore forecasts.
+It shows a pool overview with account availability, Plus-base remaining capacity, 5-hour quota, weekly quota, plan weights, restore forecasts, and recent request health.
 
 > Community project. Not an official CLIProxyAPI component.
 
@@ -15,13 +15,19 @@ It shows a simple pool overview with account availability, Plus-base remaining c
 
 ## Features
 
-- Native SwiftUI macOS app
+- Native SwiftUI macOS app and WidgetKit desktop widgets
 - CLIProxyAPI Management API integration
 - ChatGPT `wham/usage` quota display through `/v0/management/api-call`
 - 5-hour and weekly quota bars
+- Small, medium, and large widgets
+- Medium widget with two quota rings and restore timing
+- Large widget with overall health status
+- Recent request health timeline
+- Account sorting by `5h`, `Week`, or `Name`
 - Graphical restore forecast segment on each quota bar
 - Plus / Pro Lite / Pro plan weights
 - Weekly kill-line handling to avoid over-counting accounts with exhausted weekly quota
+- Batched usage fetching with one retry
 - Local-only settings storage
 
 ## How It Works
@@ -67,6 +73,7 @@ CLIProxyAPI replaces `$TOKEN$` with the selected account token.
    - Refresh options
    - Plan weights
 5. Click `Test Fetch`.
+6. Add the `CLIProxy Pool` widget from macOS desktop widget editing.
 
 Unsigned community builds may require extra macOS confirmation on first launch:
 
@@ -82,6 +89,7 @@ Requirements:
 
 - macOS 14 or newer
 - Xcode 16 or newer
+- A signing setup that supports App Groups if you want live widget data
 
 Build from Terminal:
 
@@ -90,21 +98,39 @@ xcodebuild \
   -scheme CLIProxyPoolWidget \
   -configuration Release \
   -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGNING_ALLOWED=NO \
+  -derivedDataPath .build/DerivedData \
+  -allowProvisioningUpdates \
+  DEVELOPMENT_TEAM=<your-team-id> \
   build
 ```
 
-For local unsigned development, ad-hoc sign the app after building:
+Create a DMG:
 
 ```bash
-APP="$HOME/Library/Developer/Xcode/DerivedData/CLIProxyPoolWidget-*/Build/Products/Release/CLIProxyPoolWidget.app"
-
-codesign --force --sign - \
-  --entitlements App/CLIProxyPoolWidget.entitlements \
-  "$APP"
+mkdir -p dist
+hdiutil create \
+  -volname "CLIProxyPoolWidget" \
+  -srcfolder .build/DerivedData/Build/Products/Release/CLIProxyPoolWidget.app \
+  -ov \
+  -format UDZO \
+  dist/CLIProxyPoolWidget-0.2.0.dmg
 ```
 
 The app bundle does not include a locally configured Management key by default. The key is stored at runtime in macOS user defaults on the user's machine.
+
+## Widgets
+
+The widget extension supports three sizes:
+
+- Small: compact balance rows for `5h` and `Week`.
+- Medium: left `5h` ring, center restore card, right `Week` ring.
+- Large: quota rows, plan breakdown, and overall health status.
+
+If the app has data but the widget does not, check App Group signing. The app and widget must share the same App Group entitlement, and the provisioning profile must allow it. Free Personal Team signing may not reliably enable App Groups for WidgetKit extensions.
+
+For debugging details, see [docs/DEBUGGING.md](docs/DEBUGGING.md).
+
+For release notes, see [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
 
 ## Settings And Privacy
 
@@ -150,7 +176,6 @@ Quota or rate-limit responses from `/api-call` are treated as quota state when t
 
 - Keychain storage for the Management key
 - Signed and notarized release workflow
-- Desktop widgets after the WidgetKit implementation is stable
 - Multiple pool profiles
 - Custom account labels
 
@@ -164,9 +189,9 @@ MIT License. See [LICENSE](LICENSE).
 
 [English](#cliproxy-pool-watch) | 中文
 
-CLIProxy Pool Watch 是一个简单的原生 macOS 应用，用来监控 CLIProxyAPI 里的 ChatGPT/Codex 账号额度。
+CLIProxy Pool Watch 是一个简单的原生 macOS 应用和桌面小组件，用来监控 CLIProxyAPI 里的 ChatGPT/Codex 账号额度。
 
-它只提供一个主应用 overview：账号可用状态、Plus 基准剩余额度、5 小时额度、周额度、套餐权重，以及下一批恢复预测。
+它提供主应用 overview 和 WidgetKit 桌面小组件：账号可用状态、Plus 基准剩余额度、5 小时额度、周额度、套餐权重、下一批恢复预测，以及近期请求健康状态。
 
 > 社区项目，不是 CLIProxyAPI 官方组件。
 
@@ -176,13 +201,19 @@ CLIProxy Pool Watch 是一个简单的原生 macOS 应用，用来监控 CLIProx
 
 ## 功能
 
-- 原生 SwiftUI macOS 应用
+- 原生 SwiftUI macOS 应用和 WidgetKit 桌面小组件
 - 接入 CLIProxyAPI Management API
 - 通过 `/v0/management/api-call` 获取 ChatGPT `wham/usage` 额度
 - 显示 5 小时额度和周额度
+- 支持小号、中号、大号桌面小组件
+- 中号小组件显示两个额度圆环和恢复时间
+- 大号小组件显示整体健康状态
+- 近期请求健康时间线
+- 账号可按 `5h`、`Week`、`Name` 排序
 - 每条额度进度条显示图形化恢复预测段
 - Plus / Pro Lite / Pro 套餐权重
 - 支持周额度 kill line，避免周额度耗尽的账号造成总额度虚高
+- 分批拉取 usage，并在失败时重试一次
 - 设置只保存在本机
 
 ## 工作原理
@@ -228,6 +259,7 @@ CLIProxyAPI 会把 `$TOKEN$` 替换为对应账号的 token。
    - 刷新选项
    - 套餐权重
 5. 点击 `Test Fetch`。
+6. 在 macOS 桌面编辑小组件，添加 `CLIProxy Pool`。
 
 未签名的社区构建第一次打开时，macOS 可能需要额外确认：
 
@@ -243,6 +275,7 @@ xattr -dr com.apple.quarantine /Applications/CLIProxyPoolWidget.app
 
 - macOS 14 或更新版本
 - Xcode 16 或更新版本
+- 如果要让桌面小组件读取真实数据，需要支持 App Groups 的签名配置
 
 用 Terminal 构建：
 
@@ -251,21 +284,39 @@ xcodebuild \
   -scheme CLIProxyPoolWidget \
   -configuration Release \
   -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGNING_ALLOWED=NO \
+  -derivedDataPath .build/DerivedData \
+  -allowProvisioningUpdates \
+  DEVELOPMENT_TEAM=<your-team-id> \
   build
 ```
 
-本地无签名开发可以在构建后做 ad-hoc 签名：
+创建 DMG：
 
 ```bash
-APP="$HOME/Library/Developer/Xcode/DerivedData/CLIProxyPoolWidget-*/Build/Products/Release/CLIProxyPoolWidget.app"
-
-codesign --force --sign - \
-  --entitlements App/CLIProxyPoolWidget.entitlements \
-  "$APP"
+mkdir -p dist
+hdiutil create \
+  -volname "CLIProxyPoolWidget" \
+  -srcfolder .build/DerivedData/Build/Products/Release/CLIProxyPoolWidget.app \
+  -ov \
+  -format UDZO \
+  dist/CLIProxyPoolWidget-0.2.0.dmg
 ```
 
 默认情况下，app bundle 不会包含本地配置过的 Management key。key 是用户运行应用后保存在自己 Mac 的 user defaults 里。
+
+## 桌面小组件
+
+Widget extension 支持三种尺寸：
+
+- 小号：紧凑显示 `5h` 和 `Week` 两条额度。
+- 中号：左边 `5h` 圆环，中间恢复卡片，右边 `Week` 圆环。
+- 大号：额度、套餐分布、整体健康状态。
+
+如果主应用有数据但桌面小组件没有数据，优先检查 App Group 签名。app 和 widget 必须共享同一个 App Group entitlement，并且 provisioning profile 必须允许这个 App Group。免费 Personal Team 签名可能无法稳定启用 WidgetKit extension 的 App Groups。
+
+调试说明见 [docs/DEBUGGING.md](docs/DEBUGGING.md)。
+
+发布说明见 [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)。
 
 ## 设置与隐私
 
@@ -311,7 +362,6 @@ codesign --force --sign - \
 
 - 用 Keychain 保存 Management key
 - 签名和 notarized 发布流程
-- 等 WidgetKit 实现稳定后再加入桌面小组件
 - 多个 pool 配置
 - 自定义账号名称
 

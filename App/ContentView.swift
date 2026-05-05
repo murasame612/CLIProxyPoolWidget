@@ -24,7 +24,7 @@ struct ContentView: View {
 
                 Section("Widget") {
                     Stepper("Refresh: \(draft.refreshMinutes) min", value: $draft.refreshMinutes, in: 5...60, step: 5)
-                    Stepper("Usage accounts: \(draft.usageAccountLimit)", value: $draft.usageAccountLimit, in: 1...32)
+                    Stepper("Displayed accounts: \(draft.usageAccountLimit)", value: $draft.usageAccountLimit, in: 1...32)
                     Toggle("Show Codex/OpenAI accounts only", isOn: $draft.showOnlyCodex)
                 }
 
@@ -49,9 +49,11 @@ struct ContentView: View {
                     Button("Save") {
                         let saved = sanitized(draft)
                         draft = saved
-                        settingsStore.syncToWidget(saved)
+                        let didSyncWidgetSettings = settingsStore.syncToWidget(saved)
                         WidgetCenter.shared.reloadAllTimelines()
-                        lastMessage = "Saved. The widget will refresh shortly."
+                        lastMessage = didSyncWidgetSettings
+                            ? "Saved. The widget will refresh shortly."
+                            : "Saved in app, but widget sync failed. Enable App Groups signing for the app and widget targets."
                         Task { await refreshSummary(showSpinner: false) }
                     }
                     .keyboardShortcut(.defaultAction)
@@ -71,7 +73,7 @@ struct ContentView: View {
             .padding()
             .navigationSplitViewColumnWidth(min: 280, ideal: 320)
         } detail: {
-            SummaryView(summary: summary, isLoading: isLoading)
+            SummaryView(summary: summary, isLoading: isLoading, accountDisplayLimit: sanitized(draft).usageAccountLimit)
                 .padding()
         }
         .onAppear {
@@ -175,6 +177,17 @@ struct ContentView: View {
 struct SummaryView: View {
     let summary: PoolSummary
     let isLoading: Bool
+    let accountDisplayLimit: Int
+    @AppStorage("accountSortMode") private var accountSortMode = AccountSortMode.fiveHour.rawValue
+    @AppStorage("accountSortDescending") private var accountSortDescending = true
+
+    private var sortMode: AccountSortMode {
+        AccountSortMode(rawValue: accountSortMode) ?? .fiveHour
+    }
+
+    private var sortedAccounts: [AccountUsage] {
+        Array(sorted(summary.accounts, by: sortMode, descending: accountSortDescending).prefix(max(1, accountDisplayLimit)))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -209,16 +222,38 @@ struct SummaryView: View {
                     PlanBreakdownView(breakdown: summary.planBreakdown)
                 }
 
+                HealthOverview(buckets: summary.recentRequests)
+
                 HStack(spacing: 12) {
                     MetricTile(title: "Available", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", systemImage: "checkmark.circle.fill", color: .green)
                     MetricTile(title: "Cooling", value: "\(summary.coolingAccounts)", systemImage: "clock.fill", color: .orange)
                     MetricTile(title: "Recent failed", value: "\(summary.failedRecentRequests)", systemImage: "xmark.octagon.fill", color: .red)
                 }
 
-                List(summary.accounts) { account in
-                    AccountRow(account: account)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Picker("Sort", selection: $accountSortMode) {
+                            ForEach(AccountSortMode.allCases) { mode in
+                                Label(mode.title, systemImage: mode.systemImage)
+                                    .tag(mode.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Button {
+                            accountSortDescending.toggle()
+                        } label: {
+                            Image(systemName: accountSortDescending ? "arrow.down" : "arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                        .help(accountSortDescending ? "High to low" : "Low to high")
+                    }
+
+                    List(sortedAccounts) { account in
+                        AccountRow(account: account)
+                    }
+                    .listStyle(.inset)
                 }
-                .listStyle(.inset)
             }
 
             Spacer()
@@ -230,6 +265,75 @@ struct SummaryView: View {
 
     private func formatPercent(_ value: Double) -> String {
         value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+    }
+
+    private func sorted(_ accounts: [AccountUsage], by mode: AccountSortMode, descending: Bool) -> [AccountUsage] {
+        accounts.sorted { lhs, rhs in
+            let comparison: ComparisonResult
+            switch mode {
+            case .fiveHour:
+                comparison = compare(
+                    lhs.primaryWeightedRemaining,
+                    rhs.primaryWeightedRemaining,
+                    lhs: lhs,
+                    rhs: rhs
+                )
+            case .week:
+                comparison = compare(
+                    lhs.weeklyWeightedRemaining,
+                    rhs.weeklyWeightedRemaining,
+                    lhs: lhs,
+                    rhs: rhs
+                )
+            case .name:
+                comparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            }
+
+            if comparison == .orderedSame {
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            return descending ? comparison == .orderedDescending : comparison == .orderedAscending
+        }
+    }
+
+    private func compare(_ lhsValue: Double, _ rhsValue: Double, lhs: AccountUsage, rhs: AccountUsage) -> ComparisonResult {
+        if lhsValue == rhsValue {
+            if lhs.weight != rhs.weight {
+                return lhs.weight < rhs.weight ? .orderedAscending : .orderedDescending
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+        }
+        return lhsValue < rhsValue ? .orderedAscending : .orderedDescending
+    }
+}
+
+enum AccountSortMode: String, CaseIterable, Identifiable {
+    case fiveHour
+    case week
+    case name
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fiveHour:
+            return "5h"
+        case .week:
+            return "Week"
+        case .name:
+            return "Name"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .fiveHour:
+            return "clock"
+        case .week:
+            return "calendar"
+        case .name:
+            return "textformat"
+        }
     }
 }
 
@@ -255,10 +359,113 @@ struct MetricTile: View {
     }
 }
 
-struct AccountRow: View {
-    let account: AccountUsage
+struct HealthOverview: View {
+    let buckets: [RecentRequestBucket]
+
+    private var failedCount: Int {
+        buckets.reduce(0) { $0 + $1.failed }
+    }
 
     var body: some View {
+        HStack(spacing: 12) {
+            Label("Health", systemImage: "waveform.path.ecg")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
+            HealthTimeline(buckets: buckets, height: 10, minCapsuleWidth: 6, maxCapsuleWidth: 28)
+                .frame(maxWidth: .infinity, alignment: .center)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(failedCount)")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(failedCount > 0 ? .red : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text("failed")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 92, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct HealthTimeline: View {
+    let buckets: [RecentRequestBucket]
+    var height: CGFloat = 8
+    var minCapsuleWidth: CGFloat = 4
+    var maxCapsuleWidth: CGFloat = 18
+    private let spacing: CGFloat = 3
+
+    private var displayBuckets: [RecentRequestBucket] {
+        let latest = Array(buckets.suffix(20))
+        let padding = max(0, 20 - latest.count)
+        return Array(repeating: RecentRequestBucket(success: 0, failed: 0), count: padding) + latest
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let buckets = displayBuckets
+            let count = max(1, buckets.count)
+            let availableWidth = max(0, proxy.size.width - spacing * CGFloat(count - 1))
+            let adaptiveWidth = max(minCapsuleWidth, min(maxCapsuleWidth, availableWidth / CGFloat(count)))
+
+            HStack(spacing: spacing) {
+                ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
+                    Capsule()
+                        .fill(color(for: bucket))
+                        .frame(width: adaptiveWidth, height: height)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .frame(height: height)
+        .help("Recent request health. Each capsule is one 10-minute server bucket.")
+    }
+
+    private func color(for bucket: RecentRequestBucket) -> Color {
+        if bucket.failed > 0 && bucket.success > 0 {
+            return .yellow
+        }
+        if bucket.failed > 0 {
+            return .red
+        }
+        if bucket.success > 0 {
+            return .green
+        }
+        return Color.secondary.opacity(0.22)
+    }
+}
+
+struct AccountRow: View {
+    let account: AccountUsage
+    private let rowHeight: CGFloat = 58
+
+    var body: some View {
+        GeometryReader { proxy in
+            let metrics = rowMetrics(for: proxy.size.width)
+
+            ZStack(alignment: .leading) {
+                accountIdentity
+                    .frame(width: metrics.sideWidth, alignment: .leading)
+                    .position(x: metrics.sideWidth / 2, y: rowHeight / 2)
+
+                HealthTimeline(buckets: account.recentRequests, height: 7, minCapsuleWidth: 3, maxCapsuleWidth: 12)
+                    .frame(width: metrics.centerWidth, alignment: .center)
+                    .position(x: proxy.size.width / 2, y: rowHeight / 2)
+
+                quotaDetails
+                    .frame(width: metrics.rightWidth, alignment: .trailing)
+                    .position(x: proxy.size.width - metrics.rightWidth / 2, y: rowHeight / 2)
+            }
+        }
+        .frame(height: rowHeight)
+        .padding(.vertical, 4)
+    }
+
+    private var accountIdentity: some View {
         HStack(spacing: 12) {
             Circle()
                 .fill(account.isAvailable ? Color.green : Color.orange)
@@ -269,30 +476,45 @@ struct AccountRow: View {
                     Text(account.name)
                         .font(.headline)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                     PlanBadge(planType: account.planType, weight: account.weight)
                 }
                 Text(account.statusText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
 
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 3) {
-                UsageStack(account: account)
-                if let primaryReset = account.usage?.primaryResetText,
-                   let weeklyReset = account.usage?.weeklyResetText {
-                    Text("5h \(primaryReset) · week \(weeklyReset)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                } else if account.error != nil {
-                    Text("api-call failed")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+    private var quotaDetails: some View {
+        VStack(alignment: .trailing, spacing: 3) {
+            UsageStack(account: account)
+            if let primaryReset = account.usage?.primaryResetText,
+               let weeklyReset = account.usage?.weeklyResetText {
+                Text("5h \(primaryReset) · week \(weeklyReset)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if account.error != nil {
+                Text("api-call failed")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 4)
+    }
+
+    private func rowMetrics(for width: CGFloat) -> (centerWidth: CGFloat, sideWidth: CGFloat, rightWidth: CGFloat) {
+        let gap: CGFloat = width < 620 ? 10 : 14
+        let rightReadableWidth: CGFloat = 214
+        var centerWidth = min(240, max(120, width * 0.34))
+        let readableCenterWidth = width - (rightReadableWidth + gap) * 2
+
+        if readableCenterWidth < centerWidth {
+            centerWidth = max(96, readableCenterWidth)
+        }
+
+        let sideWidth = max(0, (width - centerWidth) / 2 - gap)
+        let rightWidth = min(220, sideWidth)
+        return (centerWidth, sideWidth, rightWidth)
     }
 }
 
@@ -394,9 +616,6 @@ struct ResetHintText: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(width: 96, alignment: .trailing)
-        } else {
-            Color.clear
-                .frame(width: 96)
         }
     }
 }
@@ -471,11 +690,13 @@ struct BalanceProgressBar: View {
                 if restoreWidth > 0.5 {
                     Capsule()
                         .fill(restoreColor.opacity(0.62))
-                        .frame(width: max(8, targetWidth))
+                        .frame(width: max(3, targetWidth))
                 }
-                Capsule()
-                    .fill(UsageColor.color(forRemainingPercent: ratio * 100))
-                    .frame(width: max(8, currentWidth))
+                if currentWidth > 0.5 {
+                    Capsule()
+                        .fill(UsageColor.color(forRemainingPercent: ratio * 100))
+                        .frame(width: max(3, currentWidth))
+                }
             }
             .clipShape(Capsule())
         }
@@ -496,9 +717,12 @@ struct InlineUsageBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.quaternary)
-                Capsule()
-                    .fill(isMuted ? Color.secondary.opacity(0.45) : UsageColor.color(forRemainingPercent: value))
-                    .frame(width: max(6, proxy.size.width * value / 100))
+                let fillWidth = proxy.size.width * value / 100
+                if fillWidth > 0.5 {
+                    Capsule()
+                        .fill(isMuted ? Color.secondary.opacity(0.45) : UsageColor.color(forRemainingPercent: value))
+                        .frame(width: max(2, fillWidth))
+                }
             }
         }
         .frame(width: 90, height: 7)

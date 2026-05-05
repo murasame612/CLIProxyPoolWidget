@@ -340,9 +340,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "";
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = App/CLIProxyPoolWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = NO;
@@ -383,9 +382,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = "";
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = Widget/CLIProxyPoolWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Widget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -2,49 +2,28 @@ import Foundation
 
 struct PoolSummaryService {
     let client: PoolAPIClient
+    private let maxConcurrentUsageFetches = 4
 
     func loadSummary() async -> PoolSummary {
         do {
             let files = try await client.fetchAuthFiles()
             let visibleFiles = client.settings.showOnlyCodex ? files.filter(\.isCodexLike) : files
-            let limited = Array(visibleFiles.prefix(max(1, client.settings.usageAccountLimit)))
 
-            let accounts = await withTaskGroup(of: AccountUsage.self) { group in
-                for file in limited {
-                    group.addTask {
-                        await usage(for: file)
-                    }
-                }
-
-                var values: [AccountUsage] = []
-                for await value in group {
-                    values.append(value)
-                }
-                return values.sorted { lhs, rhs in
-                    if lhs.isAvailable != rhs.isAvailable {
-                        return lhs.isAvailable && !rhs.isAvailable
-                    }
-                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                }
-            }
+            let accounts = await loadAccountUsage(for: visibleFiles)
 
             let cooling = visibleFiles.filter { $0.unavailable || $0.nextRetryAfter != nil }.count
             let disabled = visibleFiles.filter(\.disabled).count
             let failedRecent = visibleFiles.reduce(0) { total, file in
                 total + file.recentRequests.suffix(3).reduce(0) { $0 + $1.failed }
             }
+            let recentRequests = mergeRecentRequests(from: visibleFiles, limit: 20)
             let activeAccounts = accounts.filter(\.isAvailable)
             let weightedCapacity = activeAccounts.reduce(0) { $0 + $1.weight }
             let primaryRemaining = activeAccounts.reduce(0) { $0 + $1.primaryWeightedRemaining }
             let weeklyRemaining = activeAccounts.reduce(0) { $0 + $1.weeklyWeightedRemaining }
             let breakdown = makePlanBreakdown(from: activeAccounts)
             let primaryResetHint = makeResetHint(
-                from: activeAccounts.compactMap { account in
-                    guard let seconds = account.usage?.primaryResetSeconds else {
-                        return nil
-                    }
-                    return ResetEvent(secondsUntil: seconds, restoredUnits: account.primaryResetRestoredUnits)
-                },
+                from: activeAccounts.flatMap(primaryResetEvents(for:)),
                 currentUnits: primaryRemaining,
                 capacityUnits: weightedCapacity
             )
@@ -72,6 +51,7 @@ struct PoolSummaryService {
                 weeklyCapacityUnits: weightedCapacity,
                 nextPrimaryResetHint: primaryResetHint,
                 nextWeeklyResetHint: weeklyResetHint,
+                recentRequests: recentRequests,
                 planBreakdown: breakdown,
                 accounts: accounts,
                 errorMessage: nil
@@ -90,6 +70,7 @@ struct PoolSummaryService {
                 weeklyCapacityUnits: 0,
                 nextPrimaryResetHint: nil,
                 nextWeeklyResetHint: nil,
+                recentRequests: [],
                 planBreakdown: [],
                 accounts: [],
                 errorMessage: error.localizedDescription
@@ -97,12 +78,42 @@ struct PoolSummaryService {
         }
     }
 
+    private func loadAccountUsage(for files: [AuthFile]) async -> [AccountUsage] {
+        var values: [AccountUsage] = []
+        let batchSize = max(1, maxConcurrentUsageFetches)
+
+        var start = files.startIndex
+        while start < files.endIndex {
+            let end = files.index(start, offsetBy: batchSize, limitedBy: files.endIndex) ?? files.endIndex
+            let batch = files[start..<end]
+            let batchValues = await withTaskGroup(of: AccountUsage.self) { group in
+                for file in batch {
+                    group.addTask {
+                        await usage(for: file)
+                    }
+                }
+
+                var batchResults: [AccountUsage] = []
+                for await value in group {
+                    batchResults.append(value)
+                }
+                return batchResults
+            }
+            values.append(contentsOf: batchValues)
+            start = end
+        }
+
+        return values.sorted { lhs, rhs in
+            if lhs.isAvailable != rhs.isAvailable {
+                return lhs.isAvailable && !rhs.isAvailable
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     private func usage(for file: AuthFile) async -> AccountUsage {
         do {
-            var snapshot = try await client.fetchWhamUsage(
-                authIndex: file.authIndex,
-                chatgptAccountID: file.idToken?.chatgptAccountID
-            )
+            var snapshot = try await fetchUsageWithRetry(for: file)
             if snapshot.planType == nil {
                 snapshot.planType = file.idToken?.planType
             }
@@ -114,6 +125,7 @@ struct PoolSummaryService {
                 statusText: statusText(for: file, usage: snapshot),
                 weight: client.settings.weight(for: snapshot.planType),
                 weeklyKillLinePercent: client.settings.weeklyKillLinePercent,
+                recentRequests: Array(file.recentRequests.suffix(20)),
                 usage: snapshot,
                 error: nil
             )
@@ -126,10 +138,53 @@ struct PoolSummaryService {
                 statusText: statusText(for: file),
                 weight: client.settings.weight(for: file.idToken?.planType),
                 weeklyKillLinePercent: client.settings.weeklyKillLinePercent,
+                recentRequests: Array(file.recentRequests.suffix(20)),
                 usage: nil,
                 error: error.localizedDescription
             )
         }
+    }
+
+    private func mergeRecentRequests(from files: [AuthFile], limit: Int) -> [RecentRequestBucket] {
+        let bucketCount = max(0, limit)
+        guard bucketCount > 0 else {
+            return []
+        }
+
+        var merged = Array(repeating: RecentRequestBucket(success: 0, failed: 0), count: bucketCount)
+        for file in files {
+            let buckets = Array(file.recentRequests.suffix(bucketCount))
+            let offset = bucketCount - buckets.count
+            for (index, bucket) in buckets.enumerated() {
+                let target = offset + index
+                merged[target] = RecentRequestBucket(
+                    time: bucket.time ?? merged[target].time,
+                    success: merged[target].success + bucket.success,
+                    failed: merged[target].failed + bucket.failed
+                )
+            }
+        }
+        return merged
+    }
+
+    private func fetchUsageWithRetry(for file: AuthFile) async throws -> UsageSnapshot {
+        var lastError: Error?
+
+        for attempt in 0..<2 {
+            do {
+                return try await client.fetchWhamUsage(
+                    authIndex: file.authIndex,
+                    chatgptAccountID: file.idToken?.chatgptAccountID
+                )
+            } catch {
+                lastError = error
+                if attempt == 0 {
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                }
+            }
+        }
+
+        throw lastError ?? PoolAPIError.invalidResponse
     }
 
     private func isQuotaAvailable(file: AuthFile, usage: UsageSnapshot) -> Bool {
@@ -168,6 +223,20 @@ struct PoolSummaryService {
         let restoredUnits: Double
     }
 
+    private func primaryResetEvents(for account: AccountUsage) -> [ResetEvent] {
+        var events: [ResetEvent] = []
+
+        if let seconds = account.usage?.primaryResetSeconds {
+            events.append(ResetEvent(secondsUntil: seconds, restoredUnits: account.primaryResetRestoredUnits))
+        }
+
+        if let seconds = account.usage?.weeklyResetSeconds {
+            events.append(ResetEvent(secondsUntil: seconds, restoredUnits: account.weeklyResetReleasedPrimaryUnits))
+        }
+
+        return events
+    }
+
     private func makeResetHint(
         from events: [ResetEvent],
         currentUnits: Double,
@@ -199,9 +268,11 @@ struct PoolSummaryService {
     }
 
     private func statusText(for file: AuthFile, usage: UsageSnapshot? = nil) -> String {
-        if usage?.hasQuotaSignal == true,
-           file.unavailable || !file.isAvailable {
-            return "quota limited"
+        if let usage, usage.hasQuotaSignal, file.unavailable || !file.isAvailable {
+            if isPrimaryQuotaLimited(usage) {
+                return "quota limited"
+            }
+            return "active"
         }
         if file.disabled {
             return "disabled"
@@ -219,5 +290,12 @@ struct PoolSummaryService {
             return status
         }
         return file.isAvailable ? "active" : "unknown"
+    }
+
+    private func isPrimaryQuotaLimited(_ usage: UsageSnapshot) -> Bool {
+        guard let remaining = usage.primaryRemainingPercent else {
+            return false
+        }
+        return remaining <= 0.05
     }
 }

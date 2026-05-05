@@ -55,20 +55,21 @@ enum UsageParser {
         let planType = firstString(in: pairs, matching: ["plan_type", "plan-type", "plan"])
         let status = firstString(in: pairs, matching: ["status", "tier", "plan", "bucket", "type", "code"])
         let statusLowercased = status?.lowercased() ?? ""
-        let looksQuotaLimited = [
-            "usage_limit_reached", "quota", "rate_limit", "rate limit", "limit", "limited",
-            "cap", "capacity", "exceeded", "too many", "try again"
+        let explicitUsageLimited = [
+            "usage_limit_reached", "quota_limit_reached", "rate_limit_exceeded",
+            "insufficient_quota", "quota exceeded", "usage limit", "limit has been reached"
         ].contains { needle in
             bodyLowercased.contains(needle) || statusLowercased.contains(needle)
         }
-        let inferredPrimaryUsedPercent = looksQuotaLimited ? 100.0 : nil
+        let hasResetSignal = resetSeconds != nil || reset != nil
+        let inferredPrimaryUsedPercent = explicitUsageLimited && hasResetSignal ? 100.0 : nil
 
         return UsageSnapshot(
             used: used,
             limit: limit,
             remaining: remaining,
             usedPercent: nil,
-            planType: planType ?? (looksQuotaLimited ? nil : status),
+            planType: planType ?? (explicitUsageLimited ? nil : status),
             primaryUsedPercent: inferredPrimaryUsedPercent,
             primaryResetSeconds: resetSeconds,
             primaryResetText: resetSeconds.map(formatDuration(seconds:)),

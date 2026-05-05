@@ -83,6 +83,13 @@ struct PoolAPIClient {
             if let snapshot = quotaSnapshot(from: response.body) {
                 return snapshot
             }
+            // Body is valid JSON but no quota fields — the account is
+            // likely working but rate-limited. Return the snapshot so
+            // the caller can fall back to auth-file availability.
+            if let bodyData = response.body.data(using: .utf8),
+               (try? JSONSerialization.jsonObject(with: bodyData)) != nil {
+                return UsageParser.parse(response.body)
+            }
             throw PoolAPIError.httpStatus(response.statusCode, response.body)
         }
 

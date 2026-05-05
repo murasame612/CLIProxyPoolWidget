@@ -82,19 +82,50 @@ struct SmallPoolView: View {
     let summary: PoolSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HeaderView(date: summary.generatedAt)
             Spacer()
-            Text("\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.7)
-                .monospacedDigit()
-                .foregroundStyle(WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent))
-            Text("5h balance")
-                .font(.caption)
+            Text("Balance")
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
             Spacer()
             WidgetBalanceStack(summary: summary, compact: true)
+        }
+        .containerBackground(.background, for: .widget)
+    }
+}
+
+struct MediumPoolView: View {
+    let summary: PoolSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HeaderView(date: summary.generatedAt)
+
+            HStack(alignment: .center, spacing: 8) {
+                WidgetQuotaRing(
+                    title: "5h",
+                    centerText: "\(formatPercent(summary.primaryCapacityRelativeRemainingPercent))%",
+                    detailText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
+                    value: summary.primaryRemainingUnits,
+                    total: max(summary.primaryCapacityUnits, 1),
+                    color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent)
+                )
+
+                WidgetRestoreCenter(summary: summary)
+                    .frame(width: 112)
+
+                WidgetQuotaRing(
+                    title: "Week",
+                    centerText: "\(formatPercent(summary.capacityRelativeRemainingPercent))%",
+                    detailText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
+                    value: summary.weeklyRemainingUnits,
+                    total: max(summary.weeklyCapacityUnits, 1),
+                    color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent)
+                )
+            }
+
+            Spacer(minLength: 0)
         }
         .containerBackground(.background, for: .widget)
     }
@@ -104,36 +135,100 @@ struct SmallPoolView: View {
     }
 }
 
-struct MediumPoolView: View {
+struct WidgetQuotaRing: View {
+    let title: String
+    let centerText: String
+    let detailText: String
+    let value: Double
+    let total: Double
+    let color: Color
+
+    private var ratio: Double {
+        max(0, min(1, value / max(total, 0.01)))
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Text(title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.20), lineWidth: 7)
+                Circle()
+                    .trim(from: 0, to: ratio)
+                    .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text(centerText)
+                    .font(.callout.weight(.bold).monospacedDigit())
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(width: 66, height: 66)
+
+            Text(detailText)
+                .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .frame(width: 78)
+    }
+}
+
+struct WidgetRestoreCenter: View {
     let summary: PoolSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HeaderView(date: summary.generatedAt)
-            HStack(spacing: 12) {
-                Gauge(value: summary.primaryRemainingUnits, in: 0...max(summary.primaryCapacityUnits, 1)) {
-                    Text("Balance")
-                } currentValueLabel: {
-                    Text("\(formatPercent(summary.primaryRemainingPercent))%")
-                }
-                .gaugeStyle(.accessoryCircularCapacity)
-                .tint(WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent))
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Restore")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Plus-base")
-                        .font(.title3.bold())
-                    WidgetBalanceStack(summary: summary, compact: false)
-                }
-
-                Spacer()
-            }
-            AccountList(accounts: Array(summary.accounts.prefix(2)))
+            WidgetRestoreLine(
+                title: "5h",
+                hint: summary.nextPrimaryResetHint,
+                color: Color(red: 0.22, green: 0.72, blue: 0.95)
+            )
+            WidgetRestoreLine(
+                title: "Week",
+                hint: summary.nextWeeklyResetHint,
+                color: Color(red: 0.72, green: 0.52, blue: 0.95)
+            )
         }
-        .containerBackground(.background, for: .widget)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct WidgetRestoreLine: View {
+    let title: String
+    let hint: QuotaResetHint?
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, alignment: .leading)
+            Text(text)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+        }
     }
 
-    private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+    private var text: String {
+        guard let hint else {
+            return "no restore"
+        }
+        return "+\(QuotaResetHint.format(hint.restoredPercent))% · \(hint.timeText)"
     }
 }
 
@@ -150,7 +245,7 @@ struct LargePoolView: View {
             }
             WidgetBalanceStack(summary: summary, compact: false)
             WidgetPlanBreakdownView(breakdown: summary.planBreakdown)
-            AccountList(accounts: Array(summary.accounts.prefix(6)))
+            WidgetHealthOverview(summary: summary, compact: false)
             Spacer(minLength: 0)
         }
         .containerBackground(.background, for: .widget)
@@ -167,7 +262,7 @@ struct HeaderView: View {
     var body: some View {
         HStack {
             Label("CLIProxy Pool", systemImage: "switch.2")
-                .font(.headline)
+                .font(.caption.weight(.bold))
             Spacer()
             Text(date, style: .time)
                 .font(.caption2)
@@ -226,6 +321,109 @@ struct AccountList: View {
     }
 }
 
+struct WidgetHealthOverview: View {
+    let summary: PoolSummary
+    let compact: Bool
+
+    private var failedCount: Int {
+        summary.recentRequests.reduce(0) { $0 + $1.failed }
+    }
+
+    private var successCount: Int {
+        summary.recentRequests.reduce(0) { $0 + $1.success }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
+            HStack(spacing: 8) {
+                Label("Health", systemImage: failedCount > 0 ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
+                    .font((compact ? Font.caption2 : Font.caption).weight(.bold))
+                    .foregroundStyle(failedCount > 0 ? .orange : .green)
+                Spacer(minLength: 4)
+                Text("\(successCount) ok / \(failedCount) failed")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+
+            WidgetHealthTimeline(buckets: summary.recentRequests, compact: compact)
+
+            if !compact {
+                HStack(spacing: 8) {
+                    HealthStat(title: "Ready", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", color: .green)
+                    HealthStat(title: "Cooling", value: "\(summary.coolingAccounts)", color: .orange)
+                    HealthStat(title: "Failed", value: "\(summary.failedRecentRequests)", color: .red)
+                }
+            }
+        }
+        .padding(compact ? 8 : 10)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct WidgetHealthTimeline: View {
+    let buckets: [RecentRequestBucket]
+    let compact: Bool
+    private let spacing: CGFloat = 3
+
+    private var displayBuckets: [RecentRequestBucket] {
+        let count = compact ? 12 : 20
+        let latest = Array(buckets.suffix(count))
+        let padding = max(0, count - latest.count)
+        return Array(repeating: RecentRequestBucket(success: 0, failed: 0), count: padding) + latest
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let buckets = displayBuckets
+            let count = max(1, buckets.count)
+            let availableWidth = max(0, proxy.size.width - spacing * CGFloat(count - 1))
+            let width = max(compact ? 5 : 7, availableWidth / CGFloat(count))
+
+            HStack(spacing: spacing) {
+                ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
+                    Capsule()
+                        .fill(color(for: bucket))
+                        .frame(width: width)
+                }
+            }
+        }
+        .frame(height: compact ? 8 : 10)
+    }
+
+    private func color(for bucket: RecentRequestBucket) -> Color {
+        if bucket.failed > 0 && bucket.success > 0 {
+            return .yellow
+        }
+        if bucket.failed > 0 {
+            return .red
+        }
+        if bucket.success > 0 {
+            return .green
+        }
+        return Color.secondary.opacity(0.24)
+    }
+}
+
+struct HealthStat: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.caption.weight(.bold).monospacedDigit())
+                .foregroundStyle(color)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct WidgetPlanBreakdownView: View {
     let breakdown: [PlanBreakdown]
 
@@ -256,9 +454,10 @@ struct WidgetBalanceStack: View {
     let compact: Bool
 
     var body: some View {
-        VStack(spacing: compact ? 5 : 6) {
+        VStack(spacing: compact ? 7 : 8) {
             WidgetBalanceLine(
                 label: "5h",
+                color: Color(red: 0.22, green: 0.72, blue: 0.95),
                 valueText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
                 value: summary.primaryRemainingUnits,
                 total: max(summary.primaryCapacityUnits, 1),
@@ -267,6 +466,7 @@ struct WidgetBalanceStack: View {
             )
             WidgetBalanceLine(
                 label: "Week",
+                color: Color(red: 0.72, green: 0.52, blue: 0.95),
                 valueText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
                 value: summary.weeklyRemainingUnits,
                 total: max(summary.weeklyCapacityUnits, 1),
@@ -283,6 +483,7 @@ struct WidgetBalanceStack: View {
 
 struct WidgetBalanceLine: View {
     let label: String
+    let color: Color
     let valueText: String
     let value: Double
     let total: Double
@@ -294,23 +495,21 @@ struct WidgetBalanceLine: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: compact ? 6 : 8) {
             Text(label)
-                .font(.caption2.weight(.semibold))
+                .font((compact ? Font.caption2 : Font.caption).weight(.bold))
                 .foregroundStyle(.secondary)
-                .frame(width: compact ? 30 : 34, alignment: .leading)
-            WidgetBalanceBar(value: value, total: total, hint: hint, restoreColor: restoreColor, compact: compact)
-            WidgetResetHintText(hint: hint, color: restoreColor, compact: compact)
+                .frame(width: compact ? 28 : 42, alignment: .leading)
+            WidgetBalanceBar(value: value, total: total, hint: hint, restoreColor: color, compact: compact)
+                .frame(width: compact ? 35 : nil)
+            WidgetResetHintText(hint: hint, color: color, compact: compact)
             Text(valueText)
-                .font(.caption.weight(.semibold).monospacedDigit())
+                .font((compact ? Font.caption2 : Font.caption).weight(.bold).monospacedDigit())
                 .foregroundStyle(WidgetUsageColor.color(forRemainingPercent: ratio * 100))
-                .minimumScaleFactor(0.7)
-                .frame(width: compact ? 58 : 76, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .frame(width: compact ? 55 : 90, alignment: .trailing)
         }
-    }
-
-    private var restoreColor: Color {
-        label == "5h" ? Color(red: 0.22, green: 0.72, blue: 0.95) : Color(red: 0.72, green: 0.52, blue: 0.95)
     }
 }
 
@@ -321,16 +520,21 @@ struct WidgetResetHintText: View {
 
     var body: some View {
         if let hint {
-            Text(compact ? "+\(QuotaResetHint.format(hint.restoredPercent))" : "+\(QuotaResetHint.format(hint.restoredPercent))% \(hint.timeText)")
+            Text(resetText(for: hint))
                 .font(.caption2.weight(.bold).monospacedDigit())
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .frame(width: compact ? 34 : 62, alignment: .trailing)
+                .minimumScaleFactor(0.5)
+                .frame(width: compact ? 44 : 76, alignment: .trailing)
         } else {
             Color.clear
-                .frame(width: compact ? 34 : 62)
+                .frame(width: compact ? 44 : 76)
         }
+    }
+
+    private func resetText(for hint: QuotaResetHint) -> String {
+        let amount = QuotaResetHint.format(hint.restoredPercent)
+        return compact ? "+\(amount) \(hint.timeText)" : "+\(amount)% \(hint.timeText)"
     }
 }
 
@@ -536,7 +740,7 @@ struct CLIProxyPoolWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: PoolProvider()) { entry in
             PoolWidgetView(entry: entry)
-                .padding()
+                .padding(8)
         }
         .configurationDisplayName("CLIProxy Pool")
         .description("Shows CLIProxyAPI account availability and ChatGPT usage.")
