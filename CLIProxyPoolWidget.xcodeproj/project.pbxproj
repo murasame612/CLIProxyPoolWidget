@@ -21,6 +21,7 @@
 		00100000000000000000000C /* UsageParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000006 /* UsageParser.swift */; };
 		00100000000000000000000D /* PoolSummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 002000000000000000000007 /* PoolSummaryService.swift */; };
 		00100000000000000000000E /* CLIProxyPoolWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 003000000000000000000002 /* CLIProxyPoolWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		00100000000000000000000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00200000000000000000000D /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -50,6 +51,7 @@
 		00200000000000000000000A /* Widget Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00200000000000000000000B /* CLIProxyPoolWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLIProxyPoolWidget.entitlements; sourceTree = "<group>"; };
 		00200000000000000000000C /* CLIProxyPoolWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLIProxyPoolWidgetExtension.entitlements; sourceTree = "<group>"; };
+		00200000000000000000000D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		003000000000000000000001 /* CLIProxyPoolWidget.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CLIProxyPoolWidget.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		003000000000000000000002 /* CLIProxyPoolWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; includeInIndex = 0; path = CLIProxyPoolWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -89,6 +91,7 @@
 				002000000000000000000002 /* ContentView.swift */,
 				002000000000000000000009 /* App Info.plist */,
 				00200000000000000000000B /* CLIProxyPoolWidget.entitlements */,
+				00200000000000000000000D /* Assets.xcassets */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -133,6 +136,7 @@
 			buildPhases = (
 				008000000000000000000001 /* Sources */,
 				005000000000000000000001 /* Frameworks */,
+				008000000000000000000003 /* Resources */,
 				004000000000000000000001 /* Embed App Extensions */,
 			);
 			buildRules = (
@@ -197,6 +201,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		008000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				00100000000000000000000F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		008000000000000000000001 /* Sources */ = {
@@ -339,6 +354,7 @@
 		00C000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = App/CLIProxyPoolWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -360,6 +376,7 @@
 		00C000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = App/CLIProxyPoolWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;

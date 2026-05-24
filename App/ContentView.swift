@@ -79,6 +79,10 @@ struct ContentView: View {
         .onAppear {
             draft = settingsStore.settings
             hasLoadedSettings = true
+            if draft.isConfigured {
+                settingsStore.syncToWidget(draft)
+                WidgetCenter.shared.reloadTimelines(ofKind: "CLIProxyPoolWidget")
+            }
             if draft.liveRefreshEnabled, draft.isConfigured {
                 nextLiveRefreshAt = Date()
             }
@@ -147,6 +151,7 @@ struct ContentView: View {
             lastMessage = "Configure the pool URL and management key first."
             return
         }
+        settingsStore.syncToWidget(settings)
         refreshInFlight = true
         if showSpinner {
             isLoading = true
@@ -163,6 +168,8 @@ struct ContentView: View {
             lastMessage = error
         } else {
             lastMessage = "Fetched \(loaded.totalAccounts) accounts."
+            settingsStore.syncSummaryToWidget(loaded)
+            WidgetCenter.shared.reloadAllTimelines()
         }
         if settings.liveRefreshEnabled {
             nextLiveRefreshAt = Date().addingTimeInterval(TimeInterval(max(10, settings.appRefreshSeconds)))

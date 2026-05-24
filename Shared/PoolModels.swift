@@ -1,7 +1,7 @@
 import Foundation
 
 enum PoolWatchConstants {
-    static let appGroupID = "3T3V5AFBPB.com.zipwuu.CLIProxyPoolWidget"
+    static let appGroupID = ""
     static let defaultBaseURL = ""
     static let defaultRefreshMinutes = 5
     static let defaultAppRefreshSeconds = 30

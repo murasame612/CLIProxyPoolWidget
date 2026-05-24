@@ -14,32 +14,54 @@ struct PoolProvider: TimelineProvider {
 
     func getSnapshot(in context: Context, completion: @escaping (PoolEntry) -> Void) {
         let settings = SettingsStore.loadForWidget()
+        if let summary = SettingsStore.loadSummaryForWidget() {
+            completion(PoolEntry(date: Date(), summary: summary, settingsConfigured: true))
+            return
+        }
+
         guard settings.isConfigured else {
             completion(PoolEntry(date: Date(), summary: .placeholder, settingsConfigured: false))
             return
         }
 
-        let completionBox = SendableCompletion(completion)
-        Task {
-            let summary = await PoolSummaryService(client: PoolAPIClient(settings: settings)).loadSummary()
-            completionBox.call(PoolEntry(date: Date(), summary: summary, settingsConfigured: true))
-        }
+        loadFreshEntry(settings: settings, completion: completion)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PoolEntry>) -> Void) {
         let settings = SettingsStore.loadForWidget()
+        if let summary = SettingsStore.loadSummaryForWidget() {
+            let entry = PoolEntry(date: Date(), summary: summary, settingsConfigured: true)
+            let minutes = max(5, settings.refreshMinutes)
+            completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(TimeInterval(minutes * 60)))))
+            return
+        }
+
         guard settings.isConfigured else {
             let entry = PoolEntry(date: Date(), summary: .placeholder, settingsConfigured: false)
             completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(5 * 60))))
             return
         }
 
+        let timelineCompletion = SendableCompletion(completion)
+        Task {
+            let summary = await PoolSummaryService(client: PoolAPIClient(settings: settings)).loadSummary()
+            if summary.errorMessage == nil {
+                SettingsStore.saveSummaryForWidget(summary)
+            }
+            let entry = PoolEntry(date: Date(), summary: summary, settingsConfigured: true)
+            let minutes = max(5, settings.refreshMinutes)
+            timelineCompletion.call(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(TimeInterval(minutes * 60)))))
+        }
+    }
+
+    private func loadFreshEntry(settings: PoolSettings, completion: @escaping (PoolEntry) -> Void) {
         let completionBox = SendableCompletion(completion)
         Task {
             let summary = await PoolSummaryService(client: PoolAPIClient(settings: settings)).loadSummary()
-            let entry = PoolEntry(date: Date(), summary: summary, settingsConfigured: true)
-            let minutes = max(5, settings.refreshMinutes)
-            completionBox.call(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(TimeInterval(minutes * 60)))))
+            if summary.errorMessage == nil {
+                SettingsStore.saveSummaryForWidget(summary)
+            }
+            completionBox.call(PoolEntry(date: Date(), summary: summary, settingsConfigured: true))
         }
     }
 }
