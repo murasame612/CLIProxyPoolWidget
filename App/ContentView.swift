@@ -3,13 +3,8 @@ import WidgetKit
 
 struct ContentView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
-    private let liveTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @EnvironmentObject private var refreshCoordinator: PoolRefreshCoordinator
     @State private var draft = PoolSettings.empty
-    @State private var summary = PoolSummary.placeholder
-    @State private var isLoading = false
-    @State private var refreshInFlight = false
-    @State private var nextLiveRefreshAt: Date?
-    @State private var lastMessage: String?
     @State private var hasLoadedSettings = false
 
     var body: some View {
@@ -31,7 +26,7 @@ struct ContentView: View {
                 Section("App Live Mode") {
                     Toggle("Live refresh", isOn: $draft.liveRefreshEnabled)
                     Stepper("Interval: \(draft.appRefreshSeconds)s", value: $draft.appRefreshSeconds, in: 10...300, step: 5)
-                    if draft.liveRefreshEnabled, let nextLiveRefreshAt {
+                    if draft.liveRefreshEnabled, let nextLiveRefreshAt = refreshCoordinator.nextRefreshAt {
                         Text("Next refresh \(nextLiveRefreshAt.formatted(date: .omitted, time: .standard))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -47,24 +42,19 @@ struct ContentView: View {
 
                 HStack {
                     Button("Save") {
-                        let saved = sanitized(draft)
+                        let saved = PoolRefreshCoordinator.sanitize(draft)
                         draft = saved
-                        let didSyncWidgetSettings = settingsStore.syncToWidget(saved)
-                        WidgetCenter.shared.reloadAllTimelines()
-                        lastMessage = didSyncWidgetSettings
-                            ? "Saved. The widget will refresh shortly."
-                            : "Saved in app, but widget sync failed. Enable App Groups signing for the app and widget targets."
-                        Task { await refreshSummary(showSpinner: false) }
+                        Task { await refreshCoordinator.saveAndRefresh(saved) }
                     }
                     .keyboardShortcut(.defaultAction)
 
                     Button("Test Fetch") {
-                        Task { await refreshSummary() }
+                        Task { await refreshCoordinator.refresh() }
                     }
-                    .disabled(refreshInFlight || !draft.isConfigured)
+                    .disabled(refreshCoordinator.refreshInFlight || !draft.isConfigured)
                 }
 
-                if let lastMessage {
+                if let lastMessage = refreshCoordinator.lastMessage {
                     Text(lastMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -73,106 +63,22 @@ struct ContentView: View {
             .padding()
             .navigationSplitViewColumnWidth(min: 280, ideal: 320)
         } detail: {
-            SummaryView(summary: summary, isLoading: isLoading, accountDisplayLimit: sanitized(draft).usageAccountLimit)
+            SummaryView(
+                summary: refreshCoordinator.summary,
+                isLoading: refreshCoordinator.isLoading,
+                accountDisplayLimit: PoolRefreshCoordinator.sanitize(draft).usageAccountLimit
+            )
                 .padding()
         }
         .onAppear {
             draft = settingsStore.settings
             hasLoadedSettings = true
-            if draft.isConfigured {
-                settingsStore.syncToWidget(draft)
-                WidgetCenter.shared.reloadTimelines(ofKind: "CLIProxyPoolWidget")
-            }
-            if draft.liveRefreshEnabled, draft.isConfigured {
-                nextLiveRefreshAt = Date()
-            }
-            Task { await refreshSummary() }
         }
         .onChange(of: draft) { _, newValue in
             guard hasLoadedSettings else {
                 return
             }
             settingsStore.settings = newValue
-        }
-        .onChange(of: draft.liveRefreshEnabled) { _, isEnabled in
-            if isEnabled {
-                nextLiveRefreshAt = Date()
-            } else {
-                nextLiveRefreshAt = nil
-            }
-        }
-        .onChange(of: draft.appRefreshSeconds) { _, _ in
-            if draft.liveRefreshEnabled {
-                nextLiveRefreshAt = Date().addingTimeInterval(TimeInterval(max(10, sanitized(draft).appRefreshSeconds)))
-            }
-        }
-        .onReceive(liveTimer) { now in
-            guard draft.liveRefreshEnabled, draft.isConfigured else {
-                return
-            }
-
-            if nextLiveRefreshAt == nil {
-                nextLiveRefreshAt = now
-            }
-
-            guard let nextLiveRefreshAt, now >= nextLiveRefreshAt, !refreshInFlight else {
-                return
-            }
-
-            Task { await refreshSummary(showSpinner: false) }
-        }
-    }
-
-    private func sanitized(_ settings: PoolSettings) -> PoolSettings {
-        PoolSettings(
-            baseURL: settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
-            managementKey: settings.managementKey.trimmingCharacters(in: .whitespacesAndNewlines),
-            refreshMinutes: max(5, settings.refreshMinutes),
-            appRefreshSeconds: max(10, settings.appRefreshSeconds),
-            liveRefreshEnabled: settings.liveRefreshEnabled,
-            usageAccountLimit: max(1, settings.usageAccountLimit),
-            showOnlyCodex: settings.showOnlyCodex,
-            plusWeight: max(0.1, settings.plusWeight),
-            proLiteWeight: max(0.1, settings.proLiteWeight),
-            proWeight: max(0.1, settings.proWeight),
-            weeklyKillLinePercent: max(0, settings.weeklyKillLinePercent)
-        )
-    }
-
-    @MainActor
-    private func refreshSummary(showSpinner: Bool = true) async {
-        guard !refreshInFlight else {
-            return
-        }
-        let settings = sanitized(draft)
-        guard settings.isConfigured else {
-            summary = .placeholder
-            nextLiveRefreshAt = nil
-            lastMessage = "Configure the pool URL and management key first."
-            return
-        }
-        settingsStore.syncToWidget(settings)
-        refreshInFlight = true
-        if showSpinner {
-            isLoading = true
-        }
-        defer {
-            isLoading = false
-            refreshInFlight = false
-        }
-
-        lastMessage = settings.liveRefreshEnabled && !showSpinner ? "Refreshing..." : nil
-        let loaded = await PoolSummaryService(client: PoolAPIClient(settings: settings)).loadSummary()
-        summary = loaded
-        if let error = loaded.errorMessage {
-            lastMessage = error
-        } else {
-            lastMessage = "Fetched \(loaded.totalAccounts) accounts."
-            settingsStore.syncSummaryToWidget(loaded)
-            WidgetCenter.shared.reloadAllTimelines()
-        }
-        if settings.liveRefreshEnabled {
-            nextLiveRefreshAt = Date().addingTimeInterval(TimeInterval(max(10, settings.appRefreshSeconds)))
         }
     }
 
