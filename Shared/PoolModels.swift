@@ -388,10 +388,7 @@ struct UsageSnapshot: Codable, Hashable {
     }
 
     private static func format(_ value: Double) -> String {
-        if value.rounded() == value {
-            return String(Int(value))
-        }
-        return String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -505,10 +502,7 @@ struct AccountUsage: Codable, Identifiable, Hashable {
     }
 
     private static func format(_ value: Double) -> String {
-        if value.rounded() == value {
-            return String(Int(value))
-        }
-        return String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -571,10 +565,7 @@ struct QuotaResetHint: Codable, Hashable {
     }
 
     static func format(_ value: Double) -> String {
-        if value.rounded() == value {
-            return String(Int(value))
-        }
-        return String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
