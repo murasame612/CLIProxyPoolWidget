@@ -59,13 +59,15 @@ Content-Type: application/json
   "url": "https://chatgpt.com/backend-api/wham/usage",
   "header": {
     "Authorization": "Bearer $TOKEN$",
-    "Accept": "application/json",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "User-Agent": "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
+    "Chatgpt-Account-Id": "<chatgpt_account_id>"
   }
 }
 ```
 
 CLIProxyAPI replaces `$TOKEN$` with the selected account token.
+The Codex usage request intentionally mirrors the web management panel's quota request headers. In particular, the CLI-style `User-Agent` avoids ChatGPT's browser JavaScript/cookie challenge that can occur with generic browser headers. `Chatgpt-Account-Id` is included when the auth file exposes `id_token.chatgpt_account_id`.
 
 Optionally, the app can also read Xiaomi MiMo Token Plan usage directly from:
 
@@ -258,13 +260,15 @@ Content-Type: application/json
   "url": "https://chatgpt.com/backend-api/wham/usage",
   "header": {
     "Authorization": "Bearer $TOKEN$",
-    "Accept": "application/json",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "User-Agent": "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
+    "Chatgpt-Account-Id": "<chatgpt_account_id>"
   }
 }
 ```
 
 CLIProxyAPI 会把 `$TOKEN$` 替换为对应账号的 token。
+Codex usage 请求会刻意对齐 Web 管理面板里的 quota 请求头。尤其是 CLI 风格的 `User-Agent`，可以避开 generic browser header 触发的 ChatGPT JavaScript/cookie challenge。只要 auth file 里存在 `id_token.chatgpt_account_id`，应用就会带上 `Chatgpt-Account-Id`。
 
 应用也可以选择直接读取小米 MiMo Token Plan 用量：
 
