@@ -6,6 +6,7 @@ struct PoolSummaryService {
 
     func loadSummary() async -> PoolSummary {
         async let xiaomiTokenPlan = loadXiaomiTokenPlanIfNeeded()
+        async let apiKeyUsage = loadAPIKeyUsageIfNeeded()
 
         if !client.settings.isConfigured {
             return PoolSummary(
@@ -35,13 +36,15 @@ struct PoolSummaryService {
 
             let accounts = await loadAccountUsage(for: visibleFiles)
             let xiaomi = await xiaomiTokenPlan
+            let apiKeyUsages = await apiKeyUsage
+            let recentBucketSources = visibleFiles.map(\.recentRequests) + apiKeyUsages.map(\.recentRequests)
 
             let cooling = visibleFiles.filter { $0.unavailable || $0.nextRetryAfter != nil }.count
             let disabled = visibleFiles.filter(\.disabled).count
-            let failedRecent = visibleFiles.reduce(0) { total, file in
-                total + file.recentRequests.suffix(3).reduce(0) { $0 + $1.failed }
+            let failedRecent = recentBucketSources.reduce(0) { total, buckets in
+                total + buckets.suffix(3).reduce(0) { $0 + $1.failed }
             }
-            let recentRequests = mergeRecentRequests(from: visibleFiles, limit: 20)
+            let recentRequests = mergeRecentRequests(from: recentBucketSources, limit: 20)
             let activeAccounts = accounts.filter(\.isAvailable)
             let weightedCapacity = activeAccounts.reduce(0) { $0 + $1.weight }
             let primaryRemaining = activeAccounts.reduce(0) { $0 + $1.primaryWeightedRemaining }
@@ -103,6 +106,18 @@ struct PoolSummaryService {
                 xiaomiTokenPlan: xiaomi,
                 errorMessage: error.localizedDescription
             )
+        }
+    }
+
+    private func loadAPIKeyUsageIfNeeded() async -> [APIKeyUsageSnapshot] {
+        guard client.settings.isConfigured else {
+            return []
+        }
+
+        do {
+            return try await client.fetchAPIKeyUsage()
+        } catch {
+            return []
         }
     }
 
@@ -185,15 +200,15 @@ struct PoolSummaryService {
         }
     }
 
-    private func mergeRecentRequests(from files: [AuthFile], limit: Int) -> [RecentRequestBucket] {
+    private func mergeRecentRequests(from sources: [[RecentRequestBucket]], limit: Int) -> [RecentRequestBucket] {
         let bucketCount = max(0, limit)
         guard bucketCount > 0 else {
             return []
         }
 
         var merged = Array(repeating: RecentRequestBucket(success: 0, failed: 0), count: bucketCount)
-        for file in files {
-            let buckets = Array(file.recentRequests.suffix(bucketCount))
+        for source in sources {
+            let buckets = Array(source.suffix(bucketCount))
             let offset = bucketCount - buckets.count
             for (index, bucket) in buckets.enumerated() {
                 let target = offset + index

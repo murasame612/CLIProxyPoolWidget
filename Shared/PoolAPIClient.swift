@@ -49,6 +49,26 @@ struct PoolAPIClient {
         return try decoder.decode(AuthFilesResponse.self, from: data).files
     }
 
+    func fetchAPIKeyUsage() async throws -> [APIKeyUsageSnapshot] {
+        let url = try managementURL(path: "/v0/management/api-key-usage")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyManagementHeaders(to: &request)
+
+        let data = try await data(for: request)
+        let response = try JSONDecoder().decode([String: [String: APIKeyUsageEntry]].self, from: data)
+        return response.flatMap { provider, entries in
+            entries.values.map { entry in
+                APIKeyUsageSnapshot(
+                    provider: provider,
+                    success: entry.success,
+                    failed: entry.failed,
+                    recentRequests: entry.recentRequests
+                )
+            }
+        }
+    }
+
     func fetchWhamUsage(authIndex: String, chatgptAccountID: String? = nil) async throws -> UsageSnapshot {
         let url = try managementURL(path: "/v0/management/api-call")
         var request = URLRequest(url: url)
@@ -234,6 +254,18 @@ struct PoolAPIClient {
     private struct APICallEnvelope {
         let statusCode: Int
         let body: String
+    }
+
+    private struct APIKeyUsageEntry: Decodable {
+        let success: Int
+        let failed: Int
+        let recentRequests: [RecentRequestBucket]
+
+        enum CodingKeys: String, CodingKey {
+            case success
+            case failed
+            case recentRequests = "recent_requests"
+        }
     }
 
     private func apiCallEnvelope(from data: Data) -> APICallEnvelope? {

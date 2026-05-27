@@ -256,6 +256,13 @@ struct RecentRequestBucket: Codable, Hashable {
     }
 }
 
+struct APIKeyUsageSnapshot: Codable, Hashable {
+    let provider: String
+    let success: Int
+    let failed: Int
+    let recentRequests: [RecentRequestBucket]
+}
+
 struct CodexIDToken: Decodable, Hashable {
     let chatgptAccountID: String?
     let planType: String?
