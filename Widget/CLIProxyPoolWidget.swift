@@ -470,11 +470,17 @@ struct WidgetHealthTimeline: View {
             let availableWidth = max(0, proxy.size.width - spacing * CGFloat(count - 1))
             let width = max(compact ? 5 : 7, availableWidth / CGFloat(count))
 
-            HStack(spacing: spacing) {
-                ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
-                    Capsule()
-                        .fill(color(for: bucket))
-                        .frame(width: width)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.10))
+                    .frame(maxWidth: .infinity, maxHeight: compact ? 8 : 10)
+
+                HStack(spacing: spacing) {
+                    ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
+                        Capsule()
+                            .fill(color(for: bucket))
+                            .frame(width: width)
+                    }
                 }
             }
         }
@@ -491,7 +497,7 @@ struct WidgetHealthTimeline: View {
         if bucket.success > 0 {
             return .green
         }
-        return Color.secondary.opacity(0.24)
+        return .clear
     }
 }
 
