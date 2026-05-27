@@ -360,7 +360,7 @@ struct SummaryView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 
     private func sorted(_ accounts: [AccountUsage], by mode: AccountSortMode, descending: Bool) -> [AccountUsage] {
@@ -508,7 +508,7 @@ struct XiaomiTokenPlanCard: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        String(format: "%.2f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -706,7 +706,7 @@ struct PlanBreakdownView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 

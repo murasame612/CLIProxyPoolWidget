@@ -161,7 +161,7 @@ struct MediumPoolView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        String(format: "%.2f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -287,7 +287,7 @@ struct LargePoolView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -356,7 +356,7 @@ struct WidgetXiaomiTokenPlanView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -375,7 +375,7 @@ struct StatusStrip: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -534,7 +534,7 @@ struct WidgetPlanBreakdownView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
@@ -566,7 +566,7 @@ struct WidgetBalanceStack: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.0f", value)
     }
 }
 
