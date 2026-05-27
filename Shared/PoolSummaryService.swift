@@ -36,9 +36,10 @@ struct PoolSummaryService {
 
             let xiaomi = await xiaomiTokenPlan
             let apiKeyUsages = await apiKeyUsage
+            let fileRecentRequests = visibleFiles.map { recentRequestBuckets(for: $0) }
             let apiKeyRecentRequests = mergeRecentRequests(from: apiKeyUsages.map(\.recentRequests), limit: 20)
             let accounts = await loadAccountUsage(for: visibleFiles, apiKeyRecentRequests: apiKeyRecentRequests)
-            let recentBucketSources = visibleFiles.map(\.recentRequests) + [apiKeyRecentRequests]
+            let recentBucketSources = fileRecentRequests + [apiKeyRecentRequests]
 
             let cooling = visibleFiles.filter { $0.unavailable || $0.nextRetryAfter != nil }.count
             let disabled = visibleFiles.filter(\.disabled).count
@@ -213,7 +214,28 @@ struct PoolSummaryService {
         for file: AuthFile,
         apiKeyRecentRequests: [RecentRequestBucket]
     ) -> [RecentRequestBucket] {
-        mergeRecentRequests(from: [file.recentRequests, apiKeyRecentRequests], limit: 20)
+        mergeRecentRequests(from: [recentRequestBuckets(for: file), apiKeyRecentRequests], limit: 20)
+    }
+
+    private func recentRequestBuckets(for file: AuthFile) -> [RecentRequestBucket] {
+        let recentRequests = Array(file.recentRequests.suffix(20))
+        if hasActivity(recentRequests) {
+            return recentRequests
+        }
+
+        guard file.success > 0 || file.failed > 0 else {
+            return recentRequests
+        }
+
+        var fallback = Array(repeating: RecentRequestBucket(success: 0, failed: 0), count: 19)
+        fallback.append(RecentRequestBucket(success: file.success, failed: file.failed))
+        return fallback
+    }
+
+    private func hasActivity(_ buckets: [RecentRequestBucket]) -> Bool {
+        buckets.contains { bucket in
+            bucket.success > 0 || bucket.failed > 0
+        }
     }
 
     private func mergeRecentRequests(from sources: [[RecentRequestBucket]], limit: Int) -> [RecentRequestBucket] {
