@@ -19,7 +19,7 @@ struct PoolProvider: TimelineProvider {
             return
         }
 
-        guard settings.isConfigured else {
+        guard settings.isConfigured || settings.isXiaomiTokenPlanConfigured else {
             completion(PoolEntry(date: Date(), summary: .placeholder, settingsConfigured: false))
             return
         }
@@ -36,7 +36,7 @@ struct PoolProvider: TimelineProvider {
             return
         }
 
-        guard settings.isConfigured else {
+        guard settings.isConfigured || settings.isXiaomiTokenPlanConfigured else {
             let entry = PoolEntry(date: Date(), summary: .placeholder, settingsConfigured: false)
             completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(5 * 60))))
             return
@@ -107,11 +107,15 @@ struct SmallPoolView: View {
         VStack(alignment: .leading, spacing: 10) {
             HeaderView(date: summary.generatedAt)
             Spacer()
-            Text("Balance")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
-            WidgetBalanceStack(summary: summary, compact: true)
+            if let tokenPlan = summary.xiaomiTokenPlan, summary.totalAccounts == 0 {
+                WidgetXiaomiTokenPlanView(snapshot: tokenPlan, compact: true)
+            } else {
+                Text("Balance")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                WidgetBalanceStack(summary: summary, compact: true)
+            }
         }
         .containerBackground(.background, for: .widget)
     }
@@ -124,27 +128,31 @@ struct MediumPoolView: View {
         VStack(alignment: .leading, spacing: 12) {
             HeaderView(date: summary.generatedAt)
 
-            HStack(alignment: .center, spacing: 8) {
-                WidgetQuotaRing(
-                    title: "5h",
-                    centerText: "\(formatPercent(summary.primaryCapacityRelativeRemainingPercent))%",
-                    detailText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
-                    value: summary.primaryRemainingUnits,
-                    total: max(summary.primaryCapacityUnits, 1),
-                    color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent)
-                )
+            if let tokenPlan = summary.xiaomiTokenPlan, summary.totalAccounts == 0 {
+                WidgetXiaomiTokenPlanView(snapshot: tokenPlan, compact: false)
+            } else {
+                HStack(alignment: .center, spacing: 8) {
+                    WidgetQuotaRing(
+                        title: "5h",
+                        centerText: "\(formatPercent(summary.primaryCapacityRelativeRemainingPercent))%",
+                        detailText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
+                        value: summary.primaryRemainingUnits,
+                        total: max(summary.primaryCapacityUnits, 1),
+                        color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent)
+                    )
 
-                WidgetRestoreCenter(summary: summary)
-                    .frame(width: 112)
+                    WidgetRestoreCenter(summary: summary)
+                        .frame(width: 112)
 
-                WidgetQuotaRing(
-                    title: "Week",
-                    centerText: "\(formatPercent(summary.capacityRelativeRemainingPercent))%",
-                    detailText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
-                    value: summary.weeklyRemainingUnits,
-                    total: max(summary.weeklyCapacityUnits, 1),
-                    color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent)
-                )
+                    WidgetQuotaRing(
+                        title: "Week",
+                        centerText: "\(formatPercent(summary.capacityRelativeRemainingPercent))%",
+                        detailText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
+                        value: summary.weeklyRemainingUnits,
+                        total: max(summary.weeklyCapacityUnits, 1),
+                        color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent)
+                    )
+                }
             }
 
             Spacer(minLength: 0)
@@ -153,7 +161,7 @@ struct MediumPoolView: View {
     }
 
     private func formatPercent(_ value: Double) -> String {
-        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+        String(format: "%.2f", value)
     }
 }
 
@@ -260,14 +268,19 @@ struct LargePoolView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HeaderView(date: summary.generatedAt)
-            HStack(spacing: 12) {
-                StatPill(title: "5h", value: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%", color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent))
-                StatPill(title: "Week", value: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%", color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent))
-                StatPill(title: "Ready", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", color: .green)
+            if let tokenPlan = summary.xiaomiTokenPlan {
+                WidgetXiaomiTokenPlanView(snapshot: tokenPlan, compact: false)
             }
-            WidgetBalanceStack(summary: summary, compact: false)
-            WidgetPlanBreakdownView(breakdown: summary.planBreakdown)
-            WidgetHealthOverview(summary: summary, compact: false)
+            if summary.totalAccounts > 0 {
+                HStack(spacing: 12) {
+                    StatPill(title: "5h", value: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%", color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent))
+                    StatPill(title: "Week", value: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%", color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent))
+                    StatPill(title: "Ready", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", color: .green)
+                }
+                WidgetBalanceStack(summary: summary, compact: false)
+                WidgetPlanBreakdownView(breakdown: summary.planBreakdown)
+                WidgetHealthOverview(summary: summary, compact: false)
+            }
             Spacer(minLength: 0)
         }
         .containerBackground(.background, for: .widget)
@@ -290,6 +303,60 @@ struct HeaderView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+struct WidgetXiaomiTokenPlanView: View {
+    let snapshot: XiaomiTokenPlanSnapshot
+    let compact: Bool
+
+    private var color: Color {
+        if snapshot.errorMessage != nil || snapshot.expired {
+            return .orange
+        }
+        return WidgetUsageColor.color(forRemainingPercent: snapshot.remainingPercent)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 6 : 8) {
+            HStack(spacing: 6) {
+                Label("MiMo", systemImage: snapshot.errorMessage == nil ? "sparkles" : "exclamationmark.triangle.fill")
+                    .font((compact ? Font.caption2 : Font.caption).weight(.bold))
+                    .foregroundStyle(color)
+                Spacer(minLength: 4)
+                Text(snapshot.displayName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if snapshot.errorMessage != nil {
+                Text(snapshot.statusText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            } else {
+                ProgressView(value: snapshot.remainingCredits, total: max(snapshot.limitCredits, 1))
+                    .tint(color)
+                HStack {
+                    Text("\(formatPercent(snapshot.remainingPercent))% left")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(color)
+                    Spacer(minLength: 4)
+                    Text(snapshot.compactUsageText)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+        }
+        .padding(compact ? 8 : 10)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func formatPercent(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
     }
 }
 

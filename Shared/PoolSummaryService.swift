@@ -5,11 +5,36 @@ struct PoolSummaryService {
     private let maxConcurrentUsageFetches = 4
 
     func loadSummary() async -> PoolSummary {
+        async let xiaomiTokenPlan = loadXiaomiTokenPlanIfNeeded()
+
+        if !client.settings.isConfigured {
+            return PoolSummary(
+                generatedAt: Date(),
+                totalAccounts: 0,
+                availableAccounts: 0,
+                coolingAccounts: 0,
+                disabledAccounts: 0,
+                failedRecentRequests: 0,
+                primaryRemainingUnits: 0,
+                primaryCapacityUnits: 0,
+                weeklyRemainingUnits: 0,
+                weeklyCapacityUnits: 0,
+                nextPrimaryResetHint: nil,
+                nextWeeklyResetHint: nil,
+                recentRequests: [],
+                planBreakdown: [],
+                accounts: [],
+                xiaomiTokenPlan: await xiaomiTokenPlan,
+                errorMessage: nil
+            )
+        }
+
         do {
             let files = try await client.fetchAuthFiles()
             let visibleFiles = client.settings.showOnlyCodex ? files.filter(\.isCodexLike) : files
 
             let accounts = await loadAccountUsage(for: visibleFiles)
+            let xiaomi = await xiaomiTokenPlan
 
             let cooling = visibleFiles.filter { $0.unavailable || $0.nextRetryAfter != nil }.count
             let disabled = visibleFiles.filter(\.disabled).count
@@ -54,9 +79,11 @@ struct PoolSummaryService {
                 recentRequests: recentRequests,
                 planBreakdown: breakdown,
                 accounts: accounts,
+                xiaomiTokenPlan: xiaomi,
                 errorMessage: nil
             )
         } catch {
+            let xiaomi = await xiaomiTokenPlan
             return PoolSummary(
                 generatedAt: Date(),
                 totalAccounts: 0,
@@ -73,8 +100,21 @@ struct PoolSummaryService {
                 recentRequests: [],
                 planBreakdown: [],
                 accounts: [],
+                xiaomiTokenPlan: xiaomi,
                 errorMessage: error.localizedDescription
             )
+        }
+    }
+
+    private func loadXiaomiTokenPlanIfNeeded() async -> XiaomiTokenPlanSnapshot? {
+        guard client.settings.isXiaomiTokenPlanConfigured else {
+            return nil
+        }
+
+        do {
+            return try await client.fetchXiaomiTokenPlan()
+        } catch {
+            return .failure(error.localizedDescription)
         }
     }
 

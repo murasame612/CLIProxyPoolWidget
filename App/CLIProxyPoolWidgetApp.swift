@@ -47,7 +47,7 @@ final class PoolRefreshCoordinator: ObservableObject {
 
         let settings = Self.sanitize(settingsStore.settings)
         syncSettings(settings)
-        if settings.isConfigured {
+        if settings.isConfigured || settings.isXiaomiTokenPlanConfigured {
             Task { await refresh(showSpinner: false) }
         } else {
             updateSchedule(for: settings)
@@ -66,7 +66,9 @@ final class PoolRefreshCoordinator: ObservableObject {
             plusWeight: max(0.1, settings.plusWeight),
             proLiteWeight: max(0.1, settings.proLiteWeight),
             proWeight: max(0.1, settings.proWeight),
-            weeklyKillLinePercent: max(0, settings.weeklyKillLinePercent)
+            weeklyKillLinePercent: max(0, settings.weeklyKillLinePercent),
+            xiaomiTokenPlanEnabled: settings.xiaomiTokenPlanEnabled,
+            xiaomiCookie: settings.xiaomiCookie.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 
@@ -84,10 +86,10 @@ final class PoolRefreshCoordinator: ObservableObject {
         }
 
         let settings = Self.sanitize(settingsStore.settings)
-        guard settings.isConfigured else {
+        guard settings.isConfigured || settings.isXiaomiTokenPlanConfigured else {
             summary = .placeholder
             nextRefreshAt = nil
-            lastMessage = "Configure the pool URL and management key first."
+            lastMessage = "Configure the pool URL and management key or Xiaomi Token Plan cookie first."
             updateSchedule(for: settings)
             return
         }
@@ -109,7 +111,13 @@ final class PoolRefreshCoordinator: ObservableObject {
         if let error = loaded.errorMessage {
             lastMessage = error
         } else {
-            lastMessage = "Fetched \(loaded.totalAccounts) accounts."
+            if loaded.totalAccounts > 0 {
+                lastMessage = "Fetched \(loaded.totalAccounts) accounts."
+            } else if loaded.xiaomiTokenPlan != nil {
+                lastMessage = "Fetched Xiaomi Token Plan."
+            } else {
+                lastMessage = "Fetched."
+            }
             settingsStore.syncSummaryToWidget(loaded)
             WidgetCenter.shared.reloadAllTimelines()
         }
@@ -122,7 +130,7 @@ final class PoolRefreshCoordinator: ObservableObject {
     }
 
     private func syncSettings(_ settings: PoolSettings) {
-        guard settings.isConfigured else {
+        guard settings.isConfigured || settings.isXiaomiTokenPlanConfigured else {
             return
         }
         settingsStore.syncToWidget(settings)
@@ -133,7 +141,7 @@ final class PoolRefreshCoordinator: ObservableObject {
         refreshTimer?.invalidate()
         refreshTimer = nil
 
-        guard settings.isConfigured, settings.liveRefreshEnabled else {
+        guard (settings.isConfigured || settings.isXiaomiTokenPlanConfigured), settings.liveRefreshEnabled else {
             nextRefreshAt = nil
             endBackgroundActivity()
             return

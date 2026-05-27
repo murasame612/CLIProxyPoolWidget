@@ -13,6 +13,7 @@ enum PoolWatchConstants {
     static let defaultWeeklyKillLinePercent = 3.0
     static let resetAggregationSeconds = 30 * 60
     static let resetAggregationToleranceSeconds = 60
+    static let xiaomiPlatformBaseURL = "https://platform.xiaomimimo.com/api/v1"
 }
 
 struct PoolSettings: Codable, Equatable {
@@ -27,6 +28,8 @@ struct PoolSettings: Codable, Equatable {
     var proLiteWeight: Double
     var proWeight: Double
     var weeklyKillLinePercent: Double
+    var xiaomiTokenPlanEnabled: Bool
+    var xiaomiCookie: String
 
     static let empty = PoolSettings(
         baseURL: PoolWatchConstants.defaultBaseURL,
@@ -39,12 +42,19 @@ struct PoolSettings: Codable, Equatable {
         plusWeight: PoolWatchConstants.defaultPlusWeight,
         proLiteWeight: PoolWatchConstants.defaultProLiteWeight,
         proWeight: PoolWatchConstants.defaultProWeight,
-        weeklyKillLinePercent: PoolWatchConstants.defaultWeeklyKillLinePercent
+        weeklyKillLinePercent: PoolWatchConstants.defaultWeeklyKillLinePercent,
+        xiaomiTokenPlanEnabled: false,
+        xiaomiCookie: ""
     )
 
     var isConfigured: Bool {
         !baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !managementKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var isXiaomiTokenPlanConfigured: Bool {
+        xiaomiTokenPlanEnabled &&
+        !xiaomiCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func weight(for planType: String?) -> Double {
@@ -70,6 +80,8 @@ struct PoolSettings: Codable, Equatable {
         case proLiteWeight
         case proWeight
         case weeklyKillLinePercent
+        case xiaomiTokenPlanEnabled
+        case xiaomiCookie
     }
 
     init(
@@ -83,7 +95,9 @@ struct PoolSettings: Codable, Equatable {
         plusWeight: Double,
         proLiteWeight: Double,
         proWeight: Double,
-        weeklyKillLinePercent: Double
+        weeklyKillLinePercent: Double,
+        xiaomiTokenPlanEnabled: Bool,
+        xiaomiCookie: String
     ) {
         self.baseURL = baseURL
         self.managementKey = managementKey
@@ -96,6 +110,8 @@ struct PoolSettings: Codable, Equatable {
         self.proLiteWeight = proLiteWeight
         self.proWeight = proWeight
         self.weeklyKillLinePercent = weeklyKillLinePercent
+        self.xiaomiTokenPlanEnabled = xiaomiTokenPlanEnabled
+        self.xiaomiCookie = xiaomiCookie
     }
 
     init(from decoder: Decoder) throws {
@@ -111,6 +127,8 @@ struct PoolSettings: Codable, Equatable {
         proLiteWeight = try container.decodeIfPresent(Double.self, forKey: .proLiteWeight) ?? Self.empty.proLiteWeight
         proWeight = try container.decodeIfPresent(Double.self, forKey: .proWeight) ?? Self.empty.proWeight
         weeklyKillLinePercent = try container.decodeIfPresent(Double.self, forKey: .weeklyKillLinePercent) ?? Self.empty.weeklyKillLinePercent
+        xiaomiTokenPlanEnabled = try container.decodeIfPresent(Bool.self, forKey: .xiaomiTokenPlanEnabled) ?? Self.empty.xiaomiTokenPlanEnabled
+        xiaomiCookie = try container.decodeIfPresent(String.self, forKey: .xiaomiCookie) ?? Self.empty.xiaomiCookie
     }
 }
 
@@ -263,6 +281,14 @@ struct APICallRequest: Encodable {
     let url: String
     let header: [String: String]
     let data: String?
+
+    enum CodingKeys: String, CodingKey {
+        case authIndex = "auth_index"
+        case method
+        case url
+        case header
+        case data
+    }
 }
 
 struct APICallResponse: Decodable {
@@ -552,6 +578,79 @@ struct QuotaResetHint: Codable, Hashable {
     }
 }
 
+struct XiaomiTokenPlanSnapshot: Codable, Hashable {
+    let planCode: String?
+    let planName: String?
+    let currentPeriodEnd: String?
+    let expired: Bool
+    let enableAutoRenew: Bool?
+    let usedCredits: Double
+    let limitCredits: Double
+    let usedFraction: Double
+    let monthlyUsedCredits: Double?
+    let monthlyLimitCredits: Double?
+    let monthlyUsedFraction: Double?
+    let errorMessage: String?
+
+    var displayName: String {
+        planName ?? planCode ?? "Token Plan"
+    }
+
+    var usedPercent: Double {
+        max(0, min(100, usedFraction * 100))
+    }
+
+    var remainingPercent: Double {
+        max(0, 100 - usedPercent)
+    }
+
+    var remainingCredits: Double {
+        max(0, limitCredits - usedCredits)
+    }
+
+    var compactUsageText: String {
+        "\(Self.formatCredits(usedCredits)) / \(Self.formatCredits(limitCredits))"
+    }
+
+    var compactRemainingText: String {
+        "\(Self.formatCredits(remainingCredits)) left"
+    }
+
+    var statusText: String {
+        if let errorMessage, !errorMessage.isEmpty {
+            return errorMessage
+        }
+        if expired {
+            return "expired"
+        }
+        if let currentPeriodEnd, !currentPeriodEnd.isEmpty {
+            return "valid until \(currentPeriodEnd)"
+        }
+        return "active"
+    }
+
+    static func failure(_ message: String) -> XiaomiTokenPlanSnapshot {
+        XiaomiTokenPlanSnapshot(
+            planCode: nil,
+            planName: nil,
+            currentPeriodEnd: nil,
+            expired: false,
+            enableAutoRenew: nil,
+            usedCredits: 0,
+            limitCredits: 0,
+            usedFraction: 0,
+            monthlyUsedCredits: nil,
+            monthlyLimitCredits: nil,
+            monthlyUsedFraction: nil,
+            errorMessage: message
+        )
+    }
+
+    static func formatCredits(_ value: Double) -> String {
+        String(format: "%.2fM", value / 1_000_000)
+    }
+}
+
 struct PoolSummary: Codable, Hashable {
     let generatedAt: Date
     let totalAccounts: Int
@@ -568,6 +667,7 @@ struct PoolSummary: Codable, Hashable {
     let recentRequests: [RecentRequestBucket]
     let planBreakdown: [PlanBreakdown]
     let accounts: [AccountUsage]
+    let xiaomiTokenPlan: XiaomiTokenPlanSnapshot?
     let errorMessage: String?
 
     var weeklyRemainingPercent: Double {
@@ -594,6 +694,7 @@ struct PoolSummary: Codable, Hashable {
         recentRequests: [],
         planBreakdown: [],
         accounts: [],
+        xiaomiTokenPlan: nil,
         errorMessage: nil
     )
 }

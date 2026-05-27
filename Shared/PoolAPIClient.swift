@@ -2,7 +2,9 @@ import Foundation
 
 enum PoolAPIError: LocalizedError {
     case notConfigured
+    case xiaomiNotConfigured
     case invalidBaseURL
+    case chatGPTChallenge(Int)
     case httpStatus(Int, String)
     case invalidResponse
 
@@ -10,8 +12,12 @@ enum PoolAPIError: LocalizedError {
         switch self {
         case .notConfigured:
             return "Pool URL and management key are required."
+        case .xiaomiNotConfigured:
+            return "Xiaomi Token Plan cookie is required."
         case .invalidBaseURL:
             return "Pool URL is invalid."
+        case let .chatGPTChallenge(status):
+            return "ChatGPT blocked api-call: JavaScript/cookie challenge (HTTP \(status))."
         case let .httpStatus(status, body):
             return "HTTP \(status): \(body.prefix(160))"
         case .invalidResponse:
@@ -52,13 +58,12 @@ struct PoolAPIClient {
 
         var headers = [
             "Authorization": "Bearer $TOKEN$",
-            "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+            "User-Agent": "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal"
         ]
         if let chatgptAccountID = chatgptAccountID?.trimmingCharacters(in: .whitespacesAndNewlines),
            !chatgptAccountID.isEmpty {
-            headers["ChatGPT-Account-Id"] = chatgptAccountID
+            headers["Chatgpt-Account-Id"] = chatgptAccountID
         }
 
         let payload = APICallRequest(
@@ -83,6 +88,9 @@ struct PoolAPIClient {
             if let snapshot = quotaSnapshot(from: response.body) {
                 return snapshot
             }
+            if isBrowserChallenge(response.body) {
+                throw PoolAPIError.chatGPTChallenge(response.statusCode)
+            }
             // Body is valid JSON but no quota fields — the account is
             // likely working but rate-limited. Return the snapshot so
             // the caller can fall back to auth-file availability.
@@ -96,10 +104,46 @@ struct PoolAPIClient {
         if let snapshot = quotaSnapshot(from: rawBody) {
             return snapshot
         }
+        if isBrowserChallenge(rawBody) {
+            throw PoolAPIError.chatGPTChallenge(http.statusCode)
+        }
         guard (200..<300).contains(http.statusCode) else {
             throw PoolAPIError.httpStatus(http.statusCode, rawBody)
         }
         throw PoolAPIError.invalidResponse
+    }
+
+    func fetchXiaomiTokenPlan() async throws -> XiaomiTokenPlanSnapshot {
+        guard settings.isXiaomiTokenPlanConfigured else {
+            throw PoolAPIError.xiaomiNotConfigured
+        }
+
+        async let usageResponse = fetchXiaomiUsage()
+        async let detailResponse = fetchXiaomiDetail()
+        let (usage, detail) = try await (usageResponse, detailResponse)
+
+        guard let planItem = usage.data.usage.item(named: "plan_total_token") ??
+                usage.data.usage.items.first
+        else {
+            throw PoolAPIError.invalidResponse
+        }
+
+        let monthItem = usage.data.monthUsage?.item(named: "month_total_token") ??
+            usage.data.monthUsage?.items.first
+        return XiaomiTokenPlanSnapshot(
+            planCode: detail.data.planCode,
+            planName: detail.data.planName,
+            currentPeriodEnd: detail.data.currentPeriodEnd,
+            expired: detail.data.expired ?? false,
+            enableAutoRenew: detail.data.enableAutoRenew,
+            usedCredits: planItem.used,
+            limitCredits: planItem.limit,
+            usedFraction: fraction(used: planItem.used, limit: planItem.limit),
+            monthlyUsedCredits: monthItem?.used,
+            monthlyLimitCredits: monthItem?.limit,
+            monthlyUsedFraction: monthItem.map { fraction(used: $0.used, limit: $0.limit) },
+            errorMessage: nil
+        )
     }
 
     private func managementURL(path: String) throws -> URL {
@@ -129,9 +173,62 @@ struct PoolAPIClient {
         request.setValue("CLIProxyPoolWidget/0.1", forHTTPHeaderField: "User-Agent")
     }
 
+    private func xiaomiURL(path: String) throws -> URL {
+        guard var components = URLComponents(string: PoolWatchConstants.xiaomiPlatformBaseURL) else {
+            throw PoolAPIError.invalidBaseURL
+        }
+        components.path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = "/" + [components.path, path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        guard let url = components.url else {
+            throw PoolAPIError.invalidBaseURL
+        }
+        return url
+    }
+
+    private func applyXiaomiHeaders(to request: inout URLRequest) {
+        request.setValue("application/json,*/*", forHTTPHeaderField: "Accept")
+        request.setValue("zh", forHTTPHeaderField: "Accept-Language")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(settings.xiaomiCookie.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "Cookie")
+        request.setValue("https://platform.xiaomimimo.com/console/plan-manage", forHTTPHeaderField: "Referer")
+        request.setValue("Asia/Shanghai", forHTTPHeaderField: "X-Timezone")
+        request.setValue("CLIProxyPoolWidget/0.1", forHTTPHeaderField: "User-Agent")
+    }
+
+    private func fetchXiaomiUsage() async throws -> XiaomiUsageResponse {
+        let url = try xiaomiURL(path: "/tokenPlan/usage")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyXiaomiHeaders(to: &request)
+        return try JSONDecoder().decode(XiaomiUsageResponse.self, from: await data(for: request))
+    }
+
+    private func fetchXiaomiDetail() async throws -> XiaomiDetailResponse {
+        let url = try xiaomiURL(path: "/tokenPlan/detail")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyXiaomiHeaders(to: &request)
+        return try JSONDecoder().decode(XiaomiDetailResponse.self, from: await data(for: request))
+    }
+
+    private func fraction(used: Double, limit: Double) -> Double {
+        guard limit > 0 else {
+            return 0
+        }
+        return max(0, min(1, used / limit))
+    }
+
     private func quotaSnapshot(from body: String) -> UsageSnapshot? {
         let snapshot = UsageParser.parse(body)
         return snapshot.hasQuotaSignal ? snapshot : nil
+    }
+
+    private func isBrowserChallenge(_ body: String) -> Bool {
+        let normalized = body.lowercased()
+        return normalized.contains("enable javascript and cookies")
+            || (normalized.contains("<html") && normalized.contains("challenge"))
     }
 
     private struct APICallEnvelope {
@@ -193,5 +290,42 @@ struct PoolAPIClient {
             throw PoolAPIError.httpStatus(http.statusCode, body)
         }
         return data
+    }
+
+    private struct XiaomiUsageResponse: Decodable {
+        let data: XiaomiUsageData
+    }
+
+    private struct XiaomiUsageData: Decodable {
+        let monthUsage: XiaomiUsageBucket?
+        let usage: XiaomiUsageBucket
+    }
+
+    private struct XiaomiUsageBucket: Decodable {
+        let percent: Double?
+        let items: [XiaomiUsageItem]
+
+        func item(named name: String) -> XiaomiUsageItem? {
+            items.first { $0.name == name }
+        }
+    }
+
+    private struct XiaomiUsageItem: Decodable {
+        let name: String
+        let used: Double
+        let limit: Double
+        let percent: Double?
+    }
+
+    private struct XiaomiDetailResponse: Decodable {
+        let data: XiaomiDetailData
+    }
+
+    private struct XiaomiDetailData: Decodable {
+        let planCode: String?
+        let planName: String?
+        let currentPeriodEnd: String?
+        let expired: Bool?
+        let enableAutoRenew: Bool?
     }
 }

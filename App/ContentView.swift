@@ -1,11 +1,13 @@
 import SwiftUI
 import WidgetKit
+import WebKit
 
 struct ContentView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
     @EnvironmentObject private var refreshCoordinator: PoolRefreshCoordinator
     @State private var draft = PoolSettings.empty
     @State private var hasLoadedSettings = false
+    @State private var showingXiaomiCookieBrowser = false
 
     var body: some View {
         NavigationSplitView {
@@ -15,6 +17,27 @@ struct ContentView: View {
                         .textFieldStyle(.roundedBorder)
                     SecureField("Management key", text: $draft.managementKey)
                         .textFieldStyle(.roundedBorder)
+                }
+
+                Section("Xiaomi Token Plan") {
+                    Toggle("Show Xiaomi Token Plan", isOn: $draft.xiaomiTokenPlanEnabled)
+                    if draft.xiaomiTokenPlanEnabled {
+                        SecureField("Platform cookie", text: $draft.xiaomiCookie)
+                            .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button {
+                                showingXiaomiCookieBrowser = true
+                            } label: {
+                                Label("Capture Cookie", systemImage: "globe")
+                            }
+                            Button {
+                                draft.xiaomiCookie = ""
+                            } label: {
+                                Label("Clear", systemImage: "trash")
+                            }
+                            .disabled(draft.xiaomiCookie.isEmpty)
+                        }
+                    }
                 }
 
                 Section("Widget") {
@@ -51,7 +74,7 @@ struct ContentView: View {
                     Button("Test Fetch") {
                         Task { await refreshCoordinator.refresh() }
                     }
-                    .disabled(refreshCoordinator.refreshInFlight || !draft.isConfigured)
+                    .disabled(refreshCoordinator.refreshInFlight || !(draft.isConfigured || draft.isXiaomiTokenPlanConfigured))
                 }
 
                 if let lastMessage = refreshCoordinator.lastMessage {
@@ -80,10 +103,162 @@ struct ContentView: View {
             }
             settingsStore.settings = newValue
         }
+        .sheet(isPresented: $showingXiaomiCookieBrowser) {
+            XiaomiCookieCaptureView { cookie in
+                draft.xiaomiTokenPlanEnabled = true
+                draft.xiaomiCookie = cookie
+                showingXiaomiCookieBrowser = false
+            } onCancel: {
+                showingXiaomiCookieBrowser = false
+            }
+            .frame(minWidth: 980, minHeight: 720)
+        }
     }
 
     private func formatWeight(_ value: Double) -> String {
         value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+    }
+}
+
+struct XiaomiCookieCaptureView: View {
+    let onCapture: (String) -> Void
+    let onCancel: () -> Void
+    @State private var latestCookie = ""
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Label("Xiaomi MiMo", systemImage: "globe")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") {
+                    onCancel()
+                }
+                Button {
+                    capture(latestCookie)
+                } label: {
+                    Label("Use Cookie", systemImage: "checkmark")
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(latestCookie.isEmpty)
+            }
+            .padding(12)
+
+            Divider()
+
+            XiaomiCookieWebView { cookie in
+                latestCookie = cookie
+                if !cookie.isEmpty {
+                    capture(cookie)
+                }
+            }
+        }
+    }
+
+    private func capture(_ cookie: String) {
+        guard !cookie.isEmpty else {
+            return
+        }
+        onCapture(cookie)
+    }
+}
+
+struct XiaomiCookieWebView: NSViewRepresentable {
+    let onCookie: (String) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCookie: onCookie)
+    }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = context.coordinator
+        context.coordinator.webView = webView
+        context.coordinator.startCookiePolling()
+        webView.load(URLRequest(url: URL(string: "https://platform.xiaomimimo.com/console/plan-manage")!))
+        return webView
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {}
+
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        coordinator.stopCookiePolling()
+        nsView.navigationDelegate = nil
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        weak var webView: WKWebView?
+        private let onCookie: (String) -> Void
+        private var timer: Timer?
+        private var lastCookie = ""
+
+        init(onCookie: @escaping (String) -> Void) {
+            self.onCookie = onCookie
+        }
+
+        func startCookiePolling() {
+            timer?.invalidate()
+            timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    self?.readCookies()
+                }
+            }
+        }
+
+        func stopCookiePolling() {
+            timer?.invalidate()
+            timer = nil
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            readCookies()
+        }
+
+        private func readCookies() {
+            webView?.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
+                guard let self else {
+                    return
+                }
+                let cookie = Self.platformCookieHeader(from: cookies)
+                guard !cookie.isEmpty, cookie != lastCookie else {
+                    return
+                }
+                lastCookie = cookie
+                DispatchQueue.main.async {
+                    self.onCookie(cookie)
+                }
+            }
+        }
+
+        private static func platformCookieHeader(from cookies: [HTTPCookie]) -> String {
+            let wantedNames = [
+                "api-platform_serviceToken",
+                "userId",
+                "api-platform_slh",
+                "api-platform_ph",
+                "cookie-preferences"
+            ]
+            let byName = Dictionary(
+                cookies
+                    .filter { cookie in
+                        wantedNames.contains(cookie.name) &&
+                        cookie.domain.contains("xiaomimimo.com")
+                    }
+                    .map { ($0.name, $0.value) },
+                uniquingKeysWith: { first, _ in first }
+            )
+
+            guard byName["api-platform_serviceToken"] != nil else {
+                return ""
+            }
+
+            return wantedNames.compactMap { name in
+                byName[name].map { "\(name)=\($0)" }
+            }
+            .joined(separator: "; ")
+        }
     }
 }
 
@@ -114,58 +289,66 @@ struct SummaryView: View {
                 }
             }
 
-            if let error = summary.errorMessage {
+            if let error = summary.errorMessage, summary.xiaomiTokenPlan == nil {
                 ContentUnavailableView("Fetch failed", systemImage: "exclamationmark.triangle", description: Text(error))
-            } else if summary.totalAccounts == 0 {
+            } else if summary.totalAccounts == 0, summary.xiaomiTokenPlan == nil {
                 ContentUnavailableView("No data yet", systemImage: "chart.bar", description: Text("Save settings and test the connection."))
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Plus-base balance")
-                        .font(.headline)
-                    BalanceStack(
-                        primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
-                        primaryValue: summary.primaryRemainingUnits,
-                        primaryTotal: max(summary.primaryCapacityUnits, 1),
-                        primaryHint: summary.nextPrimaryResetHint,
-                        weeklyText: "\(formatPercent(summary.weeklyRemainingPercent))% / \(formatPercent(summary.weeklyCapacityPercent))%",
-                        weeklyValue: summary.weeklyRemainingUnits,
-                        weeklyTotal: max(summary.weeklyCapacityUnits, 1),
-                        weeklyHint: summary.nextWeeklyResetHint
-                    )
-                    PlanBreakdownView(breakdown: summary.planBreakdown)
+                if let tokenPlan = summary.xiaomiTokenPlan {
+                    XiaomiTokenPlanCard(snapshot: tokenPlan)
                 }
 
-                HealthOverview(buckets: summary.recentRequests)
+                if let error = summary.errorMessage {
+                    ContentUnavailableView("CLIProxy fetch failed", systemImage: "exclamationmark.triangle", description: Text(error))
+                } else if summary.totalAccounts > 0 {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Plus-base balance")
+                            .font(.headline)
+                        BalanceStack(
+                            primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
+                            primaryValue: summary.primaryRemainingUnits,
+                            primaryTotal: max(summary.primaryCapacityUnits, 1),
+                            primaryHint: summary.nextPrimaryResetHint,
+                            weeklyText: "\(formatPercent(summary.weeklyRemainingPercent))% / \(formatPercent(summary.weeklyCapacityPercent))%",
+                            weeklyValue: summary.weeklyRemainingUnits,
+                            weeklyTotal: max(summary.weeklyCapacityUnits, 1),
+                            weeklyHint: summary.nextWeeklyResetHint
+                        )
+                        PlanBreakdownView(breakdown: summary.planBreakdown)
+                    }
 
-                HStack(spacing: 12) {
-                    MetricTile(title: "Available", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", systemImage: "checkmark.circle.fill", color: .green)
-                    MetricTile(title: "Cooling", value: "\(summary.coolingAccounts)", systemImage: "clock.fill", color: .orange)
-                    MetricTile(title: "Recent failed", value: "\(summary.failedRecentRequests)", systemImage: "xmark.octagon.fill", color: .red)
-                }
+                    HealthOverview(buckets: summary.recentRequests)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Picker("Sort", selection: $accountSortMode) {
-                            ForEach(AccountSortMode.allCases) { mode in
-                                Label(mode.title, systemImage: mode.systemImage)
-                                    .tag(mode.rawValue)
+                    HStack(spacing: 12) {
+                        MetricTile(title: "Available", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", systemImage: "checkmark.circle.fill", color: .green)
+                        MetricTile(title: "Cooling", value: "\(summary.coolingAccounts)", systemImage: "clock.fill", color: .orange)
+                        MetricTile(title: "Recent failed", value: "\(summary.failedRecentRequests)", systemImage: "xmark.octagon.fill", color: .red)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Picker("Sort", selection: $accountSortMode) {
+                                ForEach(AccountSortMode.allCases) { mode in
+                                    Label(mode.title, systemImage: mode.systemImage)
+                                        .tag(mode.rawValue)
+                                }
                             }
-                        }
-                        .pickerStyle(.segmented)
+                            .pickerStyle(.segmented)
 
-                        Button {
-                            accountSortDescending.toggle()
-                        } label: {
-                            Image(systemName: accountSortDescending ? "arrow.down" : "arrow.up")
+                            Button {
+                                accountSortDescending.toggle()
+                            } label: {
+                                Image(systemName: accountSortDescending ? "arrow.down" : "arrow.up")
+                            }
+                            .buttonStyle(.bordered)
+                            .help(accountSortDescending ? "High to low" : "Low to high")
                         }
-                        .buttonStyle(.bordered)
-                        .help(accountSortDescending ? "High to low" : "Low to high")
-                    }
 
-                    List(sortedAccounts) { account in
-                        AccountRow(account: account)
+                        List(sortedAccounts) { account in
+                            AccountRow(account: account)
+                        }
+                        .listStyle(.inset)
                     }
-                    .listStyle(.inset)
                 }
             }
 
@@ -269,6 +452,63 @@ struct MetricTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct XiaomiTokenPlanCard: View {
+    let snapshot: XiaomiTokenPlanSnapshot
+
+    private var hasError: Bool {
+        snapshot.errorMessage != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Xiaomi Token Plan", systemImage: hasError ? "exclamationmark.triangle.fill" : "sparkles")
+                    .font(.headline)
+                    .foregroundStyle(hasError ? .orange : .primary)
+                Spacer()
+                Text(snapshot.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            if hasError {
+                Text(snapshot.statusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                BalanceLine(
+                    label: "Plan",
+                    valueText: "\(formatPercent(snapshot.remainingPercent))% left",
+                    value: snapshot.remainingCredits,
+                    total: max(snapshot.limitCredits, 1),
+                    hint: nil
+                )
+                HStack {
+                    Text(snapshot.compactUsageText)
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(snapshot.statusText)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(snapshot.expired ? .red : .secondary)
+                }
+                if let monthlyUsed = snapshot.monthlyUsedCredits,
+                   let monthlyLimit = snapshot.monthlyLimitCredits {
+                    Text("Month \(XiaomiTokenPlanSnapshot.formatCredits(monthlyUsed)) / \(XiaomiTokenPlanSnapshot.formatCredits(monthlyLimit))")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func formatPercent(_ value: Double) -> String {
+        String(format: "%.2f", value)
     }
 }
 
@@ -405,11 +645,13 @@ struct AccountRow: View {
             if let primaryReset = account.usage?.primaryResetText,
                let weeklyReset = account.usage?.weeklyResetText {
                 Text("5h \(primaryReset) · week \(weeklyReset)")
-                    .font(.caption2)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             } else if account.error != nil {
-                Text("api-call failed")
-                    .font(.caption2)
+                Text(account.apiCallFailureText)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
         }
@@ -428,6 +670,18 @@ struct AccountRow: View {
         let sideWidth = max(0, (width - centerWidth) / 2 - gap)
         let rightWidth = min(220, sideWidth)
         return (centerWidth, sideWidth, rightWidth)
+    }
+}
+
+private extension AccountUsage {
+    var apiCallFailureText: String {
+        guard let error else {
+            return "api-call failed"
+        }
+        if error.contains("JavaScript/cookie challenge") {
+            return "ChatGPT 403: JS/cookies required"
+        }
+        return "api-call failed"
     }
 }
 
@@ -522,14 +776,12 @@ struct ResetHintText: View {
     let color: Color
 
     var body: some View {
-        if let hint {
-            Text("+\(QuotaResetHint.format(hint.restoredPercent))% in \(hint.timeText)")
-                .font(.caption.weight(.bold).monospacedDigit())
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: 96, alignment: .trailing)
-        }
+        Text(hint.map { "+\(QuotaResetHint.format($0.restoredPercent))% in \($0.timeText)" } ?? "")
+            .font(.subheadline.weight(.bold).monospacedDigit())
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.74)
+            .frame(width: 116, alignment: .trailing)
     }
 }
 
@@ -638,7 +890,7 @@ struct InlineUsageBar: View {
                 }
             }
         }
-        .frame(width: 90, height: 7)
+        .frame(width: 96, height: 8)
     }
 }
 
