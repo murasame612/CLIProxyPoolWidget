@@ -565,19 +565,12 @@ struct HealthTimeline: View {
             let availableWidth = max(0, proxy.size.width - spacing * CGFloat(count - 1))
             let adaptiveWidth = max(minCapsuleWidth, min(maxCapsuleWidth, availableWidth / CGFloat(count)))
 
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.secondary.opacity(0.10))
-                    .frame(maxWidth: .infinity, maxHeight: height)
-
-                HStack(spacing: spacing) {
-                    ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
-                        Capsule()
-                            .fill(color(for: bucket))
-                            .frame(width: adaptiveWidth, height: height)
-                    }
+            HStack(spacing: spacing) {
+                ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
+                    Capsule()
+                        .fill(color(for: bucket))
+                        .frame(width: adaptiveWidth, height: height)
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
             }
             .frame(maxWidth: .infinity, alignment: .center)
         }
@@ -595,7 +588,7 @@ struct HealthTimeline: View {
         if bucket.success > 0 {
             return .green
         }
-        return .clear
+        return Color.secondary.opacity(0.22)
     }
 }
 
