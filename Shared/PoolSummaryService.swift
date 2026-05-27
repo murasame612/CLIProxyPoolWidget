@@ -34,10 +34,11 @@ struct PoolSummaryService {
             let files = try await client.fetchAuthFiles()
             let visibleFiles = client.settings.showOnlyCodex ? files.filter(\.isCodexLike) : files
 
-            let accounts = await loadAccountUsage(for: visibleFiles)
             let xiaomi = await xiaomiTokenPlan
             let apiKeyUsages = await apiKeyUsage
-            let recentBucketSources = visibleFiles.map(\.recentRequests) + apiKeyUsages.map(\.recentRequests)
+            let apiKeyRecentRequests = mergeRecentRequests(from: apiKeyUsages.map(\.recentRequests), limit: 20)
+            let accounts = await loadAccountUsage(for: visibleFiles, apiKeyRecentRequests: apiKeyRecentRequests)
+            let recentBucketSources = visibleFiles.map(\.recentRequests) + [apiKeyRecentRequests]
 
             let cooling = visibleFiles.filter { $0.unavailable || $0.nextRetryAfter != nil }.count
             let disabled = visibleFiles.filter(\.disabled).count
@@ -133,7 +134,10 @@ struct PoolSummaryService {
         }
     }
 
-    private func loadAccountUsage(for files: [AuthFile]) async -> [AccountUsage] {
+    private func loadAccountUsage(
+        for files: [AuthFile],
+        apiKeyRecentRequests: [RecentRequestBucket]
+    ) async -> [AccountUsage] {
         var values: [AccountUsage] = []
         let batchSize = max(1, maxConcurrentUsageFetches)
 
@@ -143,8 +147,9 @@ struct PoolSummaryService {
             let batch = files[start..<end]
             let batchValues = await withTaskGroup(of: AccountUsage.self) { group in
                 for file in batch {
+                    let apiKeyRecentRequests = apiKeyRecentRequests
                     group.addTask {
-                        await usage(for: file)
+                        await usage(for: file, apiKeyRecentRequests: apiKeyRecentRequests)
                     }
                 }
 
@@ -166,7 +171,11 @@ struct PoolSummaryService {
         }
     }
 
-    private func usage(for file: AuthFile) async -> AccountUsage {
+    private func usage(
+        for file: AuthFile,
+        apiKeyRecentRequests: [RecentRequestBucket]
+    ) async -> AccountUsage {
+        let recentRequests = accountRecentRequests(for: file, apiKeyRecentRequests: apiKeyRecentRequests)
         do {
             var snapshot = try await fetchUsageWithRetry(for: file)
             if snapshot.planType == nil {
@@ -180,7 +189,7 @@ struct PoolSummaryService {
                 statusText: statusText(for: file, usage: snapshot),
                 weight: client.settings.weight(for: snapshot.planType),
                 weeklyKillLinePercent: client.settings.weeklyKillLinePercent,
-                recentRequests: Array(file.recentRequests.suffix(20)),
+                recentRequests: recentRequests,
                 usage: snapshot,
                 error: nil
             )
@@ -193,11 +202,18 @@ struct PoolSummaryService {
                 statusText: statusText(for: file),
                 weight: client.settings.weight(for: file.idToken?.planType),
                 weeklyKillLinePercent: client.settings.weeklyKillLinePercent,
-                recentRequests: Array(file.recentRequests.suffix(20)),
+                recentRequests: recentRequests,
                 usage: nil,
                 error: error.localizedDescription
             )
         }
+    }
+
+    private func accountRecentRequests(
+        for file: AuthFile,
+        apiKeyRecentRequests: [RecentRequestBucket]
+    ) -> [RecentRequestBucket] {
+        mergeRecentRequests(from: [file.recentRequests, apiKeyRecentRequests], limit: 20)
     }
 
     private func mergeRecentRequests(from sources: [[RecentRequestBucket]], limit: Int) -> [RecentRequestBucket] {
