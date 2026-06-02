@@ -8,6 +8,8 @@ struct PoolEntry: TimelineEntry {
 }
 
 struct PoolProvider: TimelineProvider {
+    private let freshCacheWindow: TimeInterval = 20
+
     func placeholder(in context: Context) -> PoolEntry {
         PoolEntry(date: Date(), summary: .placeholder, settingsConfigured: true)
     }
@@ -29,16 +31,15 @@ struct PoolProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PoolEntry>) -> Void) {
         let settings = SettingsStore.loadForWidget()
-        if let summary = SettingsStore.loadSummaryForWidget() {
-            let entry = PoolEntry(date: Date(), summary: summary, settingsConfigured: true)
-            let minutes = max(5, settings.refreshMinutes)
-            completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(TimeInterval(minutes * 60)))))
-            return
-        }
-
         guard settings.isConfigured || settings.isXiaomiTokenPlanConfigured else {
             let entry = PoolEntry(date: Date(), summary: .placeholder, settingsConfigured: false)
             completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(5 * 60))))
+            return
+        }
+
+        if let summary = SettingsStore.loadSummaryForWidget(),
+           Date().timeIntervalSince(summary.generatedAt) <= freshCacheWindow {
+            completion(makeTimeline(summary: summary, settings: settings))
             return
         }
 
@@ -48,9 +49,7 @@ struct PoolProvider: TimelineProvider {
             if summary.errorMessage == nil {
                 SettingsStore.saveSummaryForWidget(summary)
             }
-            let entry = PoolEntry(date: Date(), summary: summary, settingsConfigured: true)
-            let minutes = max(5, settings.refreshMinutes)
-            timelineCompletion.call(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(TimeInterval(minutes * 60)))))
+            timelineCompletion.call(makeTimeline(summary: summary, settings: settings))
         }
     }
 
@@ -64,6 +63,22 @@ struct PoolProvider: TimelineProvider {
             completionBox.call(PoolEntry(date: Date(), summary: summary, settingsConfigured: true))
         }
     }
+
+    private func makeTimeline(summary: PoolSummary, settings: PoolSettings) -> Timeline<PoolEntry> {
+        let now = Date()
+        let refreshInterval = TimeInterval(max(5, settings.refreshMinutes) * 60)
+        let entryStride: TimeInterval = 60
+        let entryCount = max(1, Int(refreshInterval / entryStride))
+        let entries = (0..<entryCount).map { offset in
+            let date = now.addingTimeInterval(TimeInterval(offset) * entryStride)
+            return PoolEntry(
+                date: date,
+                summary: summary.adjustingResetHints(for: date),
+                settingsConfigured: true
+            )
+        }
+        return Timeline(entries: entries, policy: .after(now.addingTimeInterval(refreshInterval)))
+    }
 }
 
 final class SendableCompletion<Value>: @unchecked Sendable {
@@ -75,6 +90,42 @@ final class SendableCompletion<Value>: @unchecked Sendable {
 
     func call(_ value: Value) {
         completion(value)
+    }
+}
+
+private extension PoolSummary {
+    func adjustingResetHints(for date: Date) -> PoolSummary {
+        PoolSummary(
+            generatedAt: generatedAt,
+            totalAccounts: totalAccounts,
+            availableAccounts: availableAccounts,
+            coolingAccounts: coolingAccounts,
+            disabledAccounts: disabledAccounts,
+            failedRecentRequests: failedRecentRequests,
+            primaryRemainingUnits: primaryRemainingUnits,
+            primaryCapacityUnits: primaryCapacityUnits,
+            weeklyRemainingUnits: weeklyRemainingUnits,
+            weeklyCapacityUnits: weeklyCapacityUnits,
+            nextPrimaryResetHint: nextPrimaryResetHint?.adjustingSeconds(from: generatedAt, to: date),
+            nextWeeklyResetHint: nextWeeklyResetHint?.adjustingSeconds(from: generatedAt, to: date),
+            recentRequests: recentRequests,
+            planBreakdown: planBreakdown,
+            accounts: accounts,
+            xiaomiTokenPlan: xiaomiTokenPlan,
+            errorMessage: errorMessage
+        )
+    }
+}
+
+private extension QuotaResetHint {
+    func adjustingSeconds(from generatedAt: Date, to date: Date) -> QuotaResetHint {
+        QuotaResetHint(
+            accountCount: accountCount,
+            secondsUntil: max(0, secondsUntil - date.timeIntervalSince(generatedAt)),
+            restoredUnits: restoredUnits,
+            targetUnits: targetUnits,
+            capacityUnits: capacityUnits
+        )
     }
 }
 

@@ -549,18 +549,24 @@ struct QuotaResetHint: Codable, Hashable {
     }
 
     var timeText: String {
-        let minutes = max(0, secondsUntil / 60)
-        if minutes < 1 {
+        let totalMinutes = max(0, Int((secondsUntil / 60).rounded()))
+        if totalMinutes < 1 {
             return "<1m"
         }
-        if minutes < 60 {
-            return "\(Int(minutes.rounded()))m"
+        if totalMinutes < 60 {
+            return "\(totalMinutes)m"
         }
-        let hours = minutes / 60
-        if hours.rounded() == hours {
-            return "\(Int(hours))h"
+        let totalHours = totalMinutes / 60
+        if totalHours < 24 {
+            let remainingMinutes = totalMinutes % 60
+            if remainingMinutes == 0 {
+                return "\(totalHours)h"
+            }
+            return String(format: "%.1fh", Double(totalMinutes) / 60)
         }
-        return String(format: "%.1fh", hours)
+        let days = totalHours / 24
+        let remainingHours = totalHours % 24
+        return remainingHours == 0 ? "\(days)d" : "\(days)d\(remainingHours)h"
     }
 
     var compactText: String {

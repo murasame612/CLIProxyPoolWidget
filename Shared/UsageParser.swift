@@ -202,6 +202,12 @@ enum UsageParser {
         let total = max(0, Int(seconds.rounded()))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
+        if hours >= 24 {
+            let days = hours / 24
+            let remainingHours = hours % 24
+            let time = remainingHours == 0 ? "\(days)d" : "\(days)d\(remainingHours)h"
+            return "resets in \(time)"
+        }
         if hours > 0 {
             return "resets in \(hours)h \(minutes)m"
         }
