@@ -5,6 +5,7 @@ import WebKit
 struct ContentView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
     @EnvironmentObject private var refreshCoordinator: PoolRefreshCoordinator
+    @AppStorage(L10n.appLanguageKey) private var preferredLanguageCode = AppLanguagePreference.auto.rawValue
     @State private var draft = PoolSettings.empty
     @State private var hasLoadedSettings = false
     @State private var showingXiaomiCookieBrowser = false
@@ -12,66 +13,99 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             Form {
-                Section("Connection") {
-                    TextField("Pool URL", text: $draft.baseURL)
+                Section(L10n.text("Connection", "连接")) {
+                    TextField(L10n.text("Pool URL", "池地址"), text: $draft.baseURL)
                         .textFieldStyle(.roundedBorder)
-                    SecureField("Management key", text: $draft.managementKey)
+                    SecureField(L10n.text("Management key", "管理密钥"), text: $draft.managementKey)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                Section("Xiaomi Token Plan") {
-                    Toggle("Show Xiaomi Token Plan", isOn: $draft.xiaomiTokenPlanEnabled)
+                Section(L10n.text("Xiaomi Token Plan", "小米 Token Plan")) {
+                    Toggle(L10n.text("Show Xiaomi Token Plan", "显示小米 Token Plan"), isOn: $draft.xiaomiTokenPlanEnabled)
                     if draft.xiaomiTokenPlanEnabled {
-                        SecureField("Platform cookie", text: $draft.xiaomiCookie)
+                        SecureField(L10n.text("Platform cookie", "平台 Cookie"), text: $draft.xiaomiCookie)
                             .textFieldStyle(.roundedBorder)
                         HStack {
                             Button {
                                 showingXiaomiCookieBrowser = true
                             } label: {
-                                Label("Capture Cookie", systemImage: "globe")
+                                Label(L10n.text("Capture Cookie", "抓取 Cookie"), systemImage: "globe")
                             }
                             Button {
                                 draft.xiaomiCookie = ""
                             } label: {
-                                Label("Clear", systemImage: "trash")
+                                Label(L10n.text("Clear", "清空"), systemImage: "trash")
                             }
                             .disabled(draft.xiaomiCookie.isEmpty)
                         }
                     }
                 }
 
-                Section("Widget") {
-                    Stepper("Refresh: \(draft.refreshMinutes) min", value: $draft.refreshMinutes, in: 5...60, step: 5)
-                    Stepper("Displayed accounts: \(draft.usageAccountLimit)", value: $draft.usageAccountLimit, in: 1...32)
-                    Toggle("Show Codex/OpenAI accounts only", isOn: $draft.showOnlyCodex)
+                Section(L10n.text("Widget", "组件")) {
+                    Picker(L10n.text("Language", "语言"), selection: $preferredLanguageCode) {
+                        ForEach(AppLanguagePreference.allCases) { language in
+                            Text(language.title)
+                                .tag(language.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Stepper(
+                        L10n.isChinese ? "刷新：\(draft.refreshMinutes) 分钟" : "Refresh: \(draft.refreshMinutes) min",
+                        value: $draft.refreshMinutes,
+                        in: 5...60,
+                        step: 5
+                    )
+                    Stepper(
+                        L10n.isChinese ? "显示账号数：\(draft.usageAccountLimit)" : "Displayed accounts: \(draft.usageAccountLimit)",
+                        value: $draft.usageAccountLimit,
+                        in: 1...32
+                    )
+                    Toggle(L10n.text("Show Codex/OpenAI accounts only", "只显示 Codex/OpenAI 账号"), isOn: $draft.showOnlyCodex)
                 }
 
-                Section("App Live Mode") {
-                    Toggle("Live refresh", isOn: $draft.liveRefreshEnabled)
-                    Stepper("Interval: \(draft.appRefreshSeconds)s", value: $draft.appRefreshSeconds, in: 10...300, step: 5)
+                Section(L10n.text("App Live Mode", "应用实时模式")) {
+                    Toggle(L10n.text("Live refresh", "实时刷新"), isOn: $draft.liveRefreshEnabled)
+                    Stepper(
+                        L10n.isChinese ? "间隔：\(draft.appRefreshSeconds) 秒" : "Interval: \(draft.appRefreshSeconds)s",
+                        value: $draft.appRefreshSeconds,
+                        in: 10...300,
+                        step: 5
+                    )
                     if draft.liveRefreshEnabled, let nextLiveRefreshAt = refreshCoordinator.nextRefreshAt {
-                        Text("Next refresh \(nextLiveRefreshAt.formatted(date: .omitted, time: .standard))")
+                        Text(
+                            L10n.isChinese
+                                ? "下次刷新 \(nextLiveRefreshAt.formatted(date: .omitted, time: .standard))"
+                                : "Next refresh \(nextLiveRefreshAt.formatted(date: .omitted, time: .standard))"
+                        )
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                Section("Plan Weights") {
+                Section(L10n.text("Plan Weights", "套餐权重")) {
                     Stepper("Plus: \(formatWeight(draft.plusWeight))x", value: $draft.plusWeight, in: 0.1...100, step: 0.1)
                     Stepper("Pro Lite: \(formatWeight(draft.proLiteWeight))x", value: $draft.proLiteWeight, in: 0.1...100, step: 0.5)
                     Stepper("Pro: \(formatWeight(draft.proWeight))x", value: $draft.proWeight, in: 0.1...100, step: 0.5)
-                    Stepper("Week kill line: \(formatWeight(draft.weeklyKillLinePercent))%", value: $draft.weeklyKillLinePercent, in: 0...20, step: 0.5)
+                    Stepper(
+                        L10n.isChinese
+                            ? "周限流阈值：\(formatWeight(draft.weeklyKillLinePercent))%"
+                            : "Week kill line: \(formatWeight(draft.weeklyKillLinePercent))%",
+                        value: $draft.weeklyKillLinePercent,
+                        in: 0...20,
+                        step: 0.5
+                    )
                 }
 
                 HStack {
-                    Button("Save") {
+                    Button(L10n.text("Save", "保存")) {
                         let saved = PoolRefreshCoordinator.sanitize(draft)
                         draft = saved
                         Task { await refreshCoordinator.saveAndRefresh(saved) }
                     }
                     .keyboardShortcut(.defaultAction)
 
-                    Button("Test Fetch") {
+                    Button(L10n.text("Test Fetch", "测试抓取")) {
                         Task { await refreshCoordinator.refresh() }
                     }
                     .disabled(refreshCoordinator.refreshInFlight || !(draft.isConfigured || draft.isXiaomiTokenPlanConfigured))
@@ -95,7 +129,14 @@ struct ContentView: View {
         }
         .onAppear {
             draft = settingsStore.settings
+            preferredLanguageCode = draft.preferredLanguageCode
             hasLoadedSettings = true
+        }
+        .onChange(of: preferredLanguageCode) { _, newValue in
+            guard hasLoadedSettings else {
+                return
+            }
+            draft.preferredLanguageCode = newValue
         }
         .onChange(of: draft) { _, newValue in
             guard hasLoadedSettings else {
@@ -128,16 +169,16 @@ struct XiaomiCookieCaptureView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Label("Xiaomi MiMo", systemImage: "globe")
+                Label(L10n.text("Xiaomi MiMo", "小米 MiMo"), systemImage: "globe")
                     .font(.headline)
                 Spacer()
-                Button("Cancel") {
+                Button(L10n.text("Cancel", "取消")) {
                     onCancel()
                 }
                 Button {
                     capture(latestCookie)
                 } label: {
-                    Label("Use Cookie", systemImage: "checkmark")
+                    Label(L10n.text("Use Cookie", "使用 Cookie"), systemImage: "checkmark")
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(latestCookie.isEmpty)
@@ -287,7 +328,7 @@ struct SummaryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("CLIProxy Pool")
+                Text(L10n.text("CLIProxy Pool", "CLIProxy 池"))
                     .font(.largeTitle.bold())
                 Spacer()
                 if isLoading {
@@ -299,21 +340,25 @@ struct SummaryView: View {
             if let error = summary.errorMessage,
                summary.xiaomiTokenPlan == nil,
                summary.apiKeyUsageSummary == nil {
-                ContentUnavailableView("Fetch failed", systemImage: "exclamationmark.triangle", description: Text(error))
+                ContentUnavailableView(L10n.text("Fetch failed", "获取失败"), systemImage: "exclamationmark.triangle", description: Text(error))
             } else if summary.totalAccounts == 0,
                       summary.xiaomiTokenPlan == nil,
                       summary.apiKeyUsageSummary == nil {
-                ContentUnavailableView("No data yet", systemImage: "chart.bar", description: Text("Save settings and test the connection."))
+                ContentUnavailableView(
+                    L10n.text("No data yet", "暂无数据"),
+                    systemImage: "chart.bar",
+                    description: Text(L10n.text("Save settings and test the connection.", "请先保存设置并测试连接。"))
+                )
             } else {
                 if let tokenPlan = summary.xiaomiTokenPlan {
                     XiaomiTokenPlanCard(snapshot: tokenPlan)
                 }
                 if let error = summary.errorMessage {
-                    ContentUnavailableView("CLIProxy fetch failed", systemImage: "exclamationmark.triangle", description: Text(error))
+                    ContentUnavailableView(L10n.text("CLIProxy fetch failed", "CLIProxy 获取失败"), systemImage: "exclamationmark.triangle", description: Text(error))
                 } else {
                     if summary.totalAccounts > 0 {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Plus-base balance")
+                            Text(L10n.text("Plus-base balance", "Plus 基础额度"))
                                 .font(.headline)
                             BalanceStack(
                                 primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
@@ -330,19 +375,11 @@ struct SummaryView: View {
                     }
                     HealthOverview(buckets: summary.recentRequests)
 
-                    if summary.totalAccounts > 0 {
-                        HStack(spacing: 12) {
-                            MetricTile(title: "Available", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", systemImage: "checkmark.circle.fill", color: .green)
-                            MetricTile(title: "Cooling", value: "\(summary.coolingAccounts)", systemImage: "clock.fill", color: .orange)
-                            MetricTile(title: "Recent failed", value: "\(summary.failedRecentRequests)", systemImage: "xmark.octagon.fill", color: .red)
-                        }
-                    }
-
                     if !displayRows.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             if summary.totalAccounts > 0 {
                                 HStack(spacing: 8) {
-                                    Picker("Sort", selection: $accountSortMode) {
+                                    Picker(L10n.text("Sort", "排序"), selection: $accountSortMode) {
                                         ForEach(AccountSortMode.allCases) { mode in
                                             Label(mode.title, systemImage: mode.systemImage)
                                                 .tag(mode.rawValue)
@@ -356,7 +393,7 @@ struct SummaryView: View {
                                         Image(systemName: accountSortDescending ? "arrow.down" : "arrow.up")
                                     }
                                     .buttonStyle(.bordered)
-                                    .help(accountSortDescending ? "High to low" : "Low to high")
+                                    .help(accountSortDescending ? L10n.text("High to low", "从高到低") : L10n.text("Low to high", "从低到高"))
                                 }
                             }
 
@@ -375,7 +412,11 @@ struct SummaryView: View {
             }
 
             Spacer()
-            Text("Updated \(summary.generatedAt.formatted(date: .omitted, time: .shortened))")
+            Text(
+                L10n.isChinese
+                    ? "更新于 \(summary.generatedAt.formatted(date: .omitted, time: .shortened))"
+                    : "Updated \(summary.generatedAt.formatted(date: .omitted, time: .shortened))"
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -451,9 +492,9 @@ enum AccountSortMode: String, CaseIterable, Identifiable {
         case .fiveHour:
             return "5h"
         case .week:
-            return "Week"
+            return L10n.text("Week", "周")
         case .name:
-            return "Name"
+            return L10n.text("Name", "名称")
         }
     }
 
@@ -469,28 +510,6 @@ enum AccountSortMode: String, CaseIterable, Identifiable {
     }
 }
 
-struct MetricTile: View {
-    let title: String
-    let value: String
-    let systemImage: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: systemImage)
-                .foregroundStyle(color)
-            Text(value)
-                .font(.title.bold())
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
 struct XiaomiTokenPlanCard: View {
     let snapshot: XiaomiTokenPlanSnapshot
 
@@ -501,7 +520,7 @@ struct XiaomiTokenPlanCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Label("Xiaomi Token Plan", systemImage: hasError ? "exclamationmark.triangle.fill" : "sparkles")
+                Label(L10n.text("Xiaomi Token Plan", "小米 Token Plan"), systemImage: hasError ? "exclamationmark.triangle.fill" : "sparkles")
                     .font(.headline)
                     .foregroundStyle(hasError ? .orange : .primary)
                 Spacer()
@@ -516,8 +535,8 @@ struct XiaomiTokenPlanCard: View {
                     .foregroundStyle(.secondary)
             } else {
                 BalanceLine(
-                    label: "Plan",
-                    valueText: "\(formatPercent(snapshot.remainingPercent))% left",
+                    label: L10n.text("Plan", "套餐"),
+                    valueText: L10n.isChinese ? "剩余 \(formatPercent(snapshot.remainingPercent))%" : "\(formatPercent(snapshot.remainingPercent))% left",
                     value: snapshot.remainingCredits,
                     total: max(snapshot.limitCredits, 1),
                     hint: nil
@@ -533,7 +552,11 @@ struct XiaomiTokenPlanCard: View {
                 }
                 if let monthlyUsed = snapshot.monthlyUsedCredits,
                    let monthlyLimit = snapshot.monthlyLimitCredits {
-                    Text("Month \(XiaomiTokenPlanSnapshot.formatCredits(monthlyUsed)) / \(XiaomiTokenPlanSnapshot.formatCredits(monthlyLimit))")
+                    Text(
+                        L10n.isChinese
+                            ? "本月 \(XiaomiTokenPlanSnapshot.formatCredits(monthlyUsed)) / \(XiaomiTokenPlanSnapshot.formatCredits(monthlyLimit))"
+                            : "Month \(XiaomiTokenPlanSnapshot.formatCredits(monthlyUsed)) / \(XiaomiTokenPlanSnapshot.formatCredits(monthlyLimit))"
+                    )
                         .font(.subheadline.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -558,22 +581,26 @@ struct APIKeyUsageCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Label("API Key Traffic", systemImage: "link.badge.plus")
+                Label(L10n.text("API Key Traffic", "API Key 流量"), systemImage: "link.badge.plus")
                     .font(.headline)
                 Spacer()
-                Text("\(summary.apiKeyCount) keys · \(summary.providerCount) providers")
+                Text(
+                    L10n.isChinese
+                        ? "\(summary.apiKeyCount) 个 key · \(summary.providerCount) 个提供方"
+                        : "\(summary.apiKeyCount) keys · \(summary.providerCount) providers"
+                )
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 12) {
-                MetricPill(title: "Req", value: "\(summary.requests)")
-                MetricPill(title: "Fail", value: "\(summary.failedRequests)")
+                MetricPill(title: L10n.text("Req", "请求"), value: "\(summary.requests)")
+                MetricPill(title: L10n.text("Fail", "失败"), value: "\(summary.failedRequests)")
                 MetricPill(title: "OK", value: "\(summary.success)")
             }
 
             HStack(spacing: 12) {
-                Label("Status", systemImage: "waveform.path.ecg")
+                Label(L10n.text("Status", "状态"), systemImage: "waveform.path.ecg")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 70, alignment: .leading)
@@ -583,7 +610,7 @@ struct APIKeyUsageCard: View {
                     Text("\(recentFailedCount)")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(recentFailedCount > 0 ? .red : .secondary)
-                    Text("recent fail")
+                    Text(L10n.text("recent fail", "最近失败"))
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -591,15 +618,21 @@ struct APIKeyUsageCard: View {
             }
 
             if summary.hasTokenUsage {
-                Text("\(formatTokens(summary.tokens.totalTokens)) total tokens")
+                Text(
+                    L10n.isChinese
+                        ? "总 Token：\(formatTokens(summary.tokens.totalTokens))"
+                        : "\(formatTokens(summary.tokens.totalTokens)) total tokens"
+                )
                     .font(.title3.bold().monospacedDigit())
                 Text(
-                    "In \(formatTokens(summary.tokens.inputTokens)) · Out \(formatTokens(summary.tokens.outputTokens)) · Think \(formatTokens(summary.tokens.reasoningTokens)) · Cache \(formatTokens(summary.tokens.cachedTokens))"
+                    L10n.isChinese
+                        ? "输入 \(formatTokens(summary.tokens.inputTokens)) · 输出 \(formatTokens(summary.tokens.outputTokens)) · 推理 \(formatTokens(summary.tokens.reasoningTokens)) · 缓存 \(formatTokens(summary.tokens.cachedTokens))"
+                        : "In \(formatTokens(summary.tokens.inputTokens)) · Out \(formatTokens(summary.tokens.outputTokens)) · Think \(formatTokens(summary.tokens.reasoningTokens)) · Cache \(formatTokens(summary.tokens.cachedTokens))"
                 )
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             } else {
-                Text("Token totals will appear after the pool API exposes runtime token usage on `api-key-usage`.")
+                Text(L10n.text("Token totals will appear after the pool API exposes runtime token usage on `api-key-usage`.", "等池 API 在 `api-key-usage` 暴露运行时 Token 用量后，这里才会显示 Token 汇总。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -651,7 +684,7 @@ struct HealthOverview: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Label("Health", systemImage: "waveform.path.ecg")
+            Label(L10n.text("Health", "健康度"), systemImage: "waveform.path.ecg")
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .frame(width: 92, alignment: .leading)
@@ -663,7 +696,7 @@ struct HealthOverview: View {
                     .foregroundStyle(failedCount > 0 ? .red : .secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                Text("failed")
+                Text(L10n.text("failed", "失败"))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -705,7 +738,7 @@ struct HealthTimeline: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(height: height)
-        .help("Recent request health. Each capsule is one 10-minute server bucket.")
+        .help(L10n.text("Recent request health. Each capsule is one 10-minute server bucket.", "最近请求健康度。每个胶囊代表一个 10 分钟服务端桶。"))
     }
 
     private func color(for bucket: RecentRequestBucket) -> Color {
@@ -774,7 +807,7 @@ struct AccountRow: View {
             UsageStack(account: account)
             if let primaryReset = account.usage?.primaryResetText,
                let weeklyReset = account.usage?.weeklyResetText {
-                Text("5h \(primaryReset) · week \(weeklyReset)")
+                Text(L10n.isChinese ? "5h \(primaryReset) · 周 \(weeklyReset)" : "5h \(primaryReset) · week \(weeklyReset)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -799,7 +832,9 @@ struct APIKeyRow: View {
 
     private var statusText: String {
         if recentFailureCount > 0 {
-            return "\(snapshot.providerDisplayName) · \(recentFailureCount) recent fail"
+            return L10n.isChinese
+                ? "\(snapshot.providerDisplayName) · 最近失败 \(recentFailureCount)"
+                : "\(snapshot.providerDisplayName) · \(recentFailureCount) recent fail"
         }
         return snapshot.providerDisplayName
     }
@@ -838,7 +873,7 @@ struct APIKeyRow: View {
                         .font(.headline)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Text("API")
+                    Text(L10n.text("API", "API"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.blue)
                         .padding(.horizontal, 6)
@@ -856,8 +891,8 @@ struct APIKeyRow: View {
     private var apiDetails: some View {
         VStack(alignment: .trailing, spacing: 3) {
             HStack(spacing: 10) {
-                apiMetric("Req", value: snapshot.totalRequests, color: .primary)
-                apiMetric("Fail", value: snapshot.runtimeFailedRequests, color: snapshot.runtimeFailedRequests > 0 ? .red : .secondary)
+                apiMetric(L10n.text("Req", "请求"), value: snapshot.totalRequests, color: .primary)
+                apiMetric(L10n.text("Fail", "失败"), value: snapshot.runtimeFailedRequests, color: snapshot.runtimeFailedRequests > 0 ? .red : .secondary)
                 apiMetric("OK", value: snapshot.success, color: .green)
             }
             .font(.caption.monospacedDigit())
@@ -897,12 +932,12 @@ private func summaryRowMetrics(for width: CGFloat) -> (centerWidth: CGFloat, sid
 private extension AccountUsage {
     var apiCallFailureText: String {
         guard let error else {
-            return "api-call failed"
+            return L10n.text("api-call failed", "API 调用失败")
         }
         if error.contains("JavaScript/cookie challenge") {
-            return "ChatGPT 403: JS/cookies required"
+            return L10n.text("ChatGPT 403: JS/cookies required", "ChatGPT 403：需要 JS/Cookie")
         }
-        return "api-call failed"
+        return L10n.text("api-call failed", "API 调用失败")
     }
 }
 
@@ -915,7 +950,7 @@ struct PlanBreakdownView: View {
                 HStack(spacing: 6) {
                     PlanDot(planType: item.planType)
                     Text("\(PlanType.displayName(item.planType)) x\(item.count)")
-                    Text("5h \(formatPercent(item.primaryWeightedPercent))% · W \(formatPercent(item.weightedPercent))%")
+                    Text(L10n.isChinese ? "5h \(formatPercent(item.primaryWeightedPercent))% · 周 \(formatPercent(item.weightedPercent))%" : "5h \(formatPercent(item.primaryWeightedPercent))% · W \(formatPercent(item.weightedPercent))%")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -951,7 +986,7 @@ struct BalanceStack: View {
                 hint: primaryHint
             )
             BalanceLine(
-                label: "Week",
+                label: L10n.text("Week", "周"),
                 valueText: weeklyText,
                 value: weeklyValue,
                 total: weeklyTotal,

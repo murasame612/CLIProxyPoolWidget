@@ -1,5 +1,47 @@
 import Foundation
 
+enum L10n {
+    static let appLanguageKey = "preferredLanguageCode"
+
+    static var selectedLanguageCode: String {
+        UserDefaults.standard.string(forKey: appLanguageKey) ?? AppLanguagePreference.auto.rawValue
+    }
+
+    static var isChinese: Bool {
+        switch selectedLanguageCode {
+        case AppLanguagePreference.chinese.rawValue:
+            return true
+        case AppLanguagePreference.english.rawValue:
+            return false
+        default:
+            return Locale.preferredLanguages.first?.hasPrefix("zh") == true
+        }
+    }
+
+    static func text(_ english: String, _ chinese: String) -> String {
+        isChinese ? chinese : english
+    }
+}
+
+enum AppLanguagePreference: String, CaseIterable, Identifiable {
+    case auto
+    case english = "en"
+    case chinese = "zh-Hans"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto:
+            return L10n.text("System", "跟随系统")
+        case .english:
+            return "English"
+        case .chinese:
+            return "中文"
+        }
+    }
+}
+
 enum PoolWatchConstants {
     static let appGroupID = ""
     static let defaultBaseURL = ""
@@ -30,6 +72,7 @@ struct PoolSettings: Codable, Equatable {
     var weeklyKillLinePercent: Double
     var xiaomiTokenPlanEnabled: Bool
     var xiaomiCookie: String
+    var preferredLanguageCode: String
 
     static let empty = PoolSettings(
         baseURL: PoolWatchConstants.defaultBaseURL,
@@ -44,7 +87,8 @@ struct PoolSettings: Codable, Equatable {
         proWeight: PoolWatchConstants.defaultProWeight,
         weeklyKillLinePercent: PoolWatchConstants.defaultWeeklyKillLinePercent,
         xiaomiTokenPlanEnabled: false,
-        xiaomiCookie: ""
+        xiaomiCookie: "",
+        preferredLanguageCode: AppLanguagePreference.auto.rawValue
     )
 
     var isConfigured: Bool {
@@ -82,6 +126,7 @@ struct PoolSettings: Codable, Equatable {
         case weeklyKillLinePercent
         case xiaomiTokenPlanEnabled
         case xiaomiCookie
+        case preferredLanguageCode
     }
 
     init(
@@ -97,7 +142,8 @@ struct PoolSettings: Codable, Equatable {
         proWeight: Double,
         weeklyKillLinePercent: Double,
         xiaomiTokenPlanEnabled: Bool,
-        xiaomiCookie: String
+        xiaomiCookie: String,
+        preferredLanguageCode: String
     ) {
         self.baseURL = baseURL
         self.managementKey = managementKey
@@ -112,6 +158,7 @@ struct PoolSettings: Codable, Equatable {
         self.weeklyKillLinePercent = weeklyKillLinePercent
         self.xiaomiTokenPlanEnabled = xiaomiTokenPlanEnabled
         self.xiaomiCookie = xiaomiCookie
+        self.preferredLanguageCode = preferredLanguageCode
     }
 
     init(from decoder: Decoder) throws {
@@ -129,6 +176,7 @@ struct PoolSettings: Codable, Equatable {
         weeklyKillLinePercent = try container.decodeIfPresent(Double.self, forKey: .weeklyKillLinePercent) ?? Self.empty.weeklyKillLinePercent
         xiaomiTokenPlanEnabled = try container.decodeIfPresent(Bool.self, forKey: .xiaomiTokenPlanEnabled) ?? Self.empty.xiaomiTokenPlanEnabled
         xiaomiCookie = try container.decodeIfPresent(String.self, forKey: .xiaomiCookie) ?? Self.empty.xiaomiCookie
+        preferredLanguageCode = try container.decodeIfPresent(String.self, forKey: .preferredLanguageCode) ?? Self.empty.preferredLanguageCode
     }
 }
 
@@ -296,6 +344,12 @@ struct APIKeyUsageSnapshot: Codable, Hashable, Identifiable {
     var runtimeFailedRequests: Int {
         failedRequests ?? failed
     }
+
+    var isCodexLike: Bool {
+        let normalized = provider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "codex" || normalized.contains("openai")
+    }
+
 }
 
 struct APIKeyTokenTotals: Codable, Hashable {
@@ -432,32 +486,42 @@ struct UsageSnapshot: Codable, Hashable {
 
     var primaryCompactText: String {
         if let primaryRemainingPercent {
-            return "\(Self.format(primaryRemainingPercent))% left"
+            return L10n.isChinese
+                ? "剩余 \(Self.format(primaryRemainingPercent))%"
+                : "\(Self.format(primaryRemainingPercent))% left"
         }
         return compactText
     }
 
     var weeklyCompactText: String {
         if let weeklyRemainingPercent {
-            return "\(Self.format(weeklyRemainingPercent))% left"
+            return L10n.isChinese
+                ? "剩余 \(Self.format(weeklyRemainingPercent))%"
+                : "\(Self.format(weeklyRemainingPercent))% left"
         }
         return compactText
     }
 
     var compactText: String {
         if let weeklyRemainingPercent {
-            return "\(Self.format(weeklyRemainingPercent))% left"
+            return L10n.isChinese
+                ? "剩余 \(Self.format(weeklyRemainingPercent))%"
+                : "\(Self.format(weeklyRemainingPercent))% left"
         }
         if let usedPercent = primaryUsedPercent ?? usedPercent {
-            return "\(Self.format(usedPercent))% used"
+            return L10n.isChinese
+                ? "已用 \(Self.format(usedPercent))%"
+                : "\(Self.format(usedPercent))% used"
         }
         if let used, let limit, limit > 0 {
             return "\(Self.format(used))/\(Self.format(limit))"
         }
         if let remaining {
-            return "\(Self.format(remaining)) left"
+            return L10n.isChinese
+                ? "剩余 \(Self.format(remaining))"
+                : "\(Self.format(remaining)) left"
         }
-        return rawStatus ?? "usage unknown"
+        return rawStatus ?? L10n.text("usage unknown", "用量未知")
     }
 
     private static func format(_ value: Double) -> String {
@@ -525,16 +589,20 @@ struct AccountUsage: Codable, Identifiable, Hashable {
 
     var effectivePrimaryCompactText: String {
         guard let effectivePrimaryRemainingPercent else {
-            return usage?.primaryCompactText ?? "unknown"
+            return usage?.primaryCompactText ?? L10n.text("unknown", "未知")
         }
-        return "\(Self.format(effectivePrimaryRemainingPercent))% left"
+        return L10n.isChinese
+            ? "剩余 \(Self.format(effectivePrimaryRemainingPercent))%"
+            : "\(Self.format(effectivePrimaryRemainingPercent))% left"
     }
 
     var effectiveWeeklyCompactText: String {
         guard let effectiveWeeklyRemainingPercent else {
-            return usage?.weeklyCompactText ?? "unknown"
+            return usage?.weeklyCompactText ?? L10n.text("unknown", "未知")
         }
-        return "\(Self.format(effectiveWeeklyRemainingPercent))% left"
+        return L10n.isChinese
+            ? "剩余 \(Self.format(effectiveWeeklyRemainingPercent))%"
+            : "\(Self.format(effectiveWeeklyRemainingPercent))% left"
     }
 
     var primaryResetRestoredUnits: Double {
@@ -617,30 +685,41 @@ struct QuotaResetHint: Codable, Hashable {
     var timeText: String {
         let totalMinutes = max(0, Int((secondsUntil / 60).rounded()))
         if totalMinutes < 1 {
-            return "<1m"
+            return L10n.text("<1m", "<1分钟")
         }
         if totalMinutes < 60 {
-            return "\(totalMinutes)m"
+            return L10n.isChinese ? "\(totalMinutes)分钟" : "\(totalMinutes)m"
         }
         let totalHours = totalMinutes / 60
         if totalHours < 24 {
             let remainingMinutes = totalMinutes % 60
             if remainingMinutes == 0 {
-                return "\(totalHours)h"
+                return L10n.isChinese ? "\(totalHours)小时" : "\(totalHours)h"
             }
-            return String(format: "%.1fh", Double(totalMinutes) / 60)
+            return L10n.isChinese
+                ? String(format: "%.1f小时", Double(totalMinutes) / 60)
+                : String(format: "%.1fh", Double(totalMinutes) / 60)
         }
         let days = totalHours / 24
         let remainingHours = totalHours % 24
+        if L10n.isChinese {
+            return remainingHours == 0 ? "\(days)天" : "\(days)天\(remainingHours)小时"
+        }
         return remainingHours == 0 ? "\(days)d" : "\(days)d\(remainingHours)h"
     }
 
     var compactText: String {
-        "+\(Self.format(restoredPercent))% -> \(Self.format(targetPercent))% in \(timeText)"
+        if L10n.isChinese {
+            return "+\(Self.format(restoredPercent))% → \(Self.format(targetPercent))%，\(timeText)后恢复"
+        }
+        return "+\(Self.format(restoredPercent))% -> \(Self.format(targetPercent))% in \(timeText)"
     }
 
     var detailText: String {
-        "\(accountCount) acct\(accountCount == 1 ? "" : "s") · cap \(Self.format(capacityPercent))%"
+        if L10n.isChinese {
+            return "\(accountCount) 个账号 · 上限 \(Self.format(capacityPercent))%"
+        }
+        return "\(accountCount) acct\(accountCount == 1 ? "" : "s") · cap \(Self.format(capacityPercent))%"
     }
 
     static func format(_ value: Double) -> String {
@@ -663,7 +742,7 @@ struct XiaomiTokenPlanSnapshot: Codable, Hashable {
     let errorMessage: String?
 
     var displayName: String {
-        planName ?? planCode ?? "Token Plan"
+        planName ?? planCode ?? L10n.text("Token Plan", "令牌套餐")
     }
 
     var usedPercent: Double {
@@ -683,7 +762,9 @@ struct XiaomiTokenPlanSnapshot: Codable, Hashable {
     }
 
     var compactRemainingText: String {
-        "\(Self.formatCredits(remainingCredits)) left"
+        L10n.isChinese
+            ? "剩余 \(Self.formatCredits(remainingCredits))"
+            : "\(Self.formatCredits(remainingCredits)) left"
     }
 
     var statusText: String {
@@ -691,12 +772,12 @@ struct XiaomiTokenPlanSnapshot: Codable, Hashable {
             return errorMessage
         }
         if expired {
-            return "expired"
+            return L10n.text("expired", "已过期")
         }
         if let currentPeriodEnd, !currentPeriodEnd.isEmpty {
-            return "valid until \(currentPeriodEnd)"
+            return L10n.isChinese ? "有效期至 \(currentPeriodEnd)" : "valid until \(currentPeriodEnd)"
         }
-        return "active"
+        return L10n.text("active", "正常")
     }
 
     static func failure(_ message: String) -> XiaomiTokenPlanSnapshot {

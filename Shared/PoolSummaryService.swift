@@ -38,7 +38,8 @@ struct PoolSummaryService {
             let visibleFiles = client.settings.showOnlyCodex ? files.filter(\.isCodexLike) : files
 
             let xiaomi = await xiaomiTokenPlan
-            let apiKeyUsages = await apiKeyUsage
+            let rawAPIKeyUsages = await apiKeyUsage
+            let apiKeyUsages = client.settings.showOnlyCodex ? rawAPIKeyUsages.filter { $0.isCodexLike } : rawAPIKeyUsages
             let apiKeyUsageSummary = summarizeAPIKeyUsage(apiKeyUsages)
             let fileRecentRequests = visibleFiles.map { recentRequestBuckets(for: $0) }
             let apiKeyRecentRequests = mergeRecentRequests(from: apiKeyUsages.map(\.recentRequests), limit: 20)
@@ -413,26 +414,45 @@ struct PoolSummaryService {
     private func statusText(for file: AuthFile, usage: UsageSnapshot? = nil) -> String {
         if let usage, usage.hasQuotaSignal, file.unavailable || !file.isAvailable {
             if isPrimaryQuotaLimited(usage) {
-                return "quota limited"
+                return L10n.text("quota limited", "额度受限")
             }
-            return "active"
+            return L10n.text("active", "正常")
         }
         if file.disabled {
-            return "disabled"
+            return L10n.text("disabled", "已禁用")
         }
         if file.unavailable {
             if let next = file.nextRetryAfter {
-                return "cooling until " + next.formatted(date: .omitted, time: .shortened)
+                return L10n.isChinese
+                    ? "冷却至 " + next.formatted(date: .omitted, time: .shortened)
+                    : "cooling until " + next.formatted(date: .omitted, time: .shortened)
             }
-            return "cooling"
+            return L10n.text("cooling", "冷却中")
         }
         if let message = file.statusMessage, !message.isEmpty {
-            return message
+            return localizedStatus(message)
         }
         if let status = file.status, !status.isEmpty {
-            return status
+            return localizedStatus(status)
         }
-        return file.isAvailable ? "active" : "unknown"
+        return file.isAvailable ? L10n.text("active", "正常") : L10n.text("unknown", "未知")
+    }
+
+    private func localizedStatus(_ value: String) -> String {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "active", "ok":
+            return L10n.text("active", "正常")
+        case "disabled":
+            return L10n.text("disabled", "已禁用")
+        case "cooling", "unavailable":
+            return L10n.text("cooling", "冷却中")
+        case "unknown":
+            return L10n.text("unknown", "未知")
+        case "quota limited", "quota_limited", "usage_limit_reached":
+            return L10n.text("quota limited", "额度受限")
+        default:
+            return value
+        }
     }
 
     private func isPrimaryQuotaLimited(_ usage: UsageSnapshot) -> Bool {

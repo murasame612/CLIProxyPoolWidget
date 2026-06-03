@@ -11,17 +11,19 @@ enum PoolAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Pool URL and management key are required."
+            return L10n.text("Pool URL and management key are required.", "需要填写池地址和管理密钥。")
         case .xiaomiNotConfigured:
-            return "Xiaomi Token Plan cookie is required."
+            return L10n.text("Xiaomi Token Plan cookie is required.", "需要填写小米 Token Plan 的 Cookie。")
         case .invalidBaseURL:
-            return "Pool URL is invalid."
+            return L10n.text("Pool URL is invalid.", "池地址无效。")
         case let .chatGPTChallenge(status):
-            return "ChatGPT blocked api-call: JavaScript/cookie challenge (HTTP \(status))."
+            return L10n.isChinese
+                ? "ChatGPT 阻止了 API 调用：需要 JavaScript/Cookie 验证（HTTP \(status)）。"
+                : "ChatGPT blocked api-call: JavaScript/cookie challenge (HTTP \(status))."
         case let .httpStatus(status, body):
             return "HTTP \(status): \(body.prefix(160))"
         case .invalidResponse:
-            return "The server returned an invalid response."
+            return L10n.text("The server returned an invalid response.", "服务端返回了无效响应。")
         }
     }
 }

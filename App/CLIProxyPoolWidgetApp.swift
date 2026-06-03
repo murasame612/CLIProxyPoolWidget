@@ -68,7 +68,8 @@ final class PoolRefreshCoordinator: ObservableObject {
             proWeight: max(0.1, settings.proWeight),
             weeklyKillLinePercent: max(0, settings.weeklyKillLinePercent),
             xiaomiTokenPlanEnabled: settings.xiaomiTokenPlanEnabled,
-            xiaomiCookie: settings.xiaomiCookie.trimmingCharacters(in: .whitespacesAndNewlines)
+            xiaomiCookie: settings.xiaomiCookie.trimmingCharacters(in: .whitespacesAndNewlines),
+            preferredLanguageCode: AppLanguagePreference(rawValue: settings.preferredLanguageCode)?.rawValue ?? AppLanguagePreference.auto.rawValue
         )
     }
 
@@ -76,7 +77,7 @@ final class PoolRefreshCoordinator: ObservableObject {
         let saved = Self.sanitize(settings)
         settingsStore.settings = saved
         syncSettings(saved)
-        lastMessage = "Saved. The widget will refresh shortly."
+        lastMessage = L10n.text("Saved. The widget will refresh shortly.", "已保存，组件很快会刷新。")
         await refresh(showSpinner: false)
     }
 
@@ -89,7 +90,10 @@ final class PoolRefreshCoordinator: ObservableObject {
         guard settings.isConfigured || settings.isXiaomiTokenPlanConfigured else {
             summary = .placeholder
             nextRefreshAt = nil
-            lastMessage = "Configure the pool URL and management key or Xiaomi Token Plan cookie first."
+            lastMessage = L10n.text(
+                "Configure the pool URL and management key or Xiaomi Token Plan cookie first.",
+                "请先配置池地址和管理密钥，或填写小米 Token Plan Cookie。"
+            )
             updateSchedule(for: settings)
             return
         }
@@ -105,18 +109,18 @@ final class PoolRefreshCoordinator: ObservableObject {
             updateSchedule(for: settings)
         }
 
-        lastMessage = settings.liveRefreshEnabled && !showSpinner ? "Refreshing..." : nil
+        lastMessage = settings.liveRefreshEnabled && !showSpinner ? L10n.text("Refreshing...", "刷新中…") : nil
         let loaded = await PoolSummaryService(client: PoolAPIClient(settings: settings)).loadSummary()
         summary = loaded
         if let error = loaded.errorMessage {
             lastMessage = error
         } else {
             if loaded.totalAccounts > 0 {
-                lastMessage = "Fetched \(loaded.totalAccounts) accounts."
+                lastMessage = L10n.isChinese ? "已获取 \(loaded.totalAccounts) 个账号。" : "Fetched \(loaded.totalAccounts) accounts."
             } else if loaded.xiaomiTokenPlan != nil {
-                lastMessage = "Fetched Xiaomi Token Plan."
+                lastMessage = L10n.text("Fetched Xiaomi Token Plan.", "已获取小米 Token Plan。")
             } else {
-                lastMessage = "Fetched."
+                lastMessage = L10n.text("Fetched.", "已获取。")
             }
             settingsStore.syncSummaryToWidget(loaded)
             WidgetCenter.shared.reloadAllTimelines()

@@ -18,7 +18,7 @@ enum UsageParser {
                 weeklyResetSeconds: nil,
                 weeklyResetText: nil,
                 resetText: nil,
-                rawStatus: "invalid usage"
+                rawStatus: L10n.text("invalid usage", "用量无效")
             )
         }
 
@@ -205,16 +205,20 @@ enum UsageParser {
         if hours >= 24 {
             let days = hours / 24
             let remainingHours = hours % 24
+            if L10n.isChinese {
+                let time = remainingHours == 0 ? "\(days)天" : "\(days)天\(remainingHours)小时"
+                return "\(time)后重置"
+            }
             let time = remainingHours == 0 ? "\(days)d" : "\(days)d\(remainingHours)h"
             return "resets in \(time)"
         }
         if hours > 0 {
-            return "resets in \(hours)h \(minutes)m"
+            return L10n.isChinese ? "\(hours)小时\(minutes)分钟后重置" : "resets in \(hours)h \(minutes)m"
         }
         if minutes > 0 {
-            return "resets in \(minutes)m"
+            return L10n.isChinese ? "\(minutes)分钟后重置" : "resets in \(minutes)m"
         }
-        return "resets soon"
+        return L10n.text("resets soon", "即将重置")
     }
 
     private static func secondsUntilReset(_ value: String) -> Double? {

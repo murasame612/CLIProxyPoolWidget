@@ -137,9 +137,9 @@ struct PoolWidgetView: View {
 
     var body: some View {
         if !entry.settingsConfigured {
-            WidgetMessageView(title: "CLIProxy Pool", message: "Open the app to configure the pool URL and key.", systemImage: "gearshape")
+            WidgetMessageView(title: L10n.text("CLIProxy Pool", "CLIProxy 池"), message: L10n.text("Open the app to configure the pool URL and key.", "打开应用以配置池地址和密钥。"), systemImage: "gearshape")
         } else if let error = entry.summary.errorMessage {
-            WidgetMessageView(title: "Fetch failed", message: error, systemImage: "exclamationmark.triangle")
+            WidgetMessageView(title: L10n.text("Fetch failed", "获取失败"), message: error, systemImage: "exclamationmark.triangle")
         } else {
             switch family {
             case .systemSmall:
@@ -163,7 +163,7 @@ struct SmallPoolView: View {
             if let tokenPlan = summary.xiaomiTokenPlan, summary.totalAccounts == 0 {
                 WidgetXiaomiTokenPlanView(snapshot: tokenPlan, compact: true)
             } else {
-                Text("Balance")
+                Text(L10n.text("Balance", "额度"))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -349,7 +349,7 @@ struct HeaderView: View {
 
     var body: some View {
         HStack {
-            Label("CLIProxy Pool", systemImage: "switch.2")
+            Label(L10n.text("CLIProxy Pool", "CLIProxy 池"), systemImage: "switch.2")
                 .font(.caption.weight(.bold))
             Spacer()
             Text(date, style: .time)
@@ -884,8 +884,8 @@ struct CLIProxyPoolWidget: Widget {
             PoolWidgetView(entry: entry)
                 .padding(8)
         }
-        .configurationDisplayName("CLIProxy Pool")
-        .description("Shows CLIProxyAPI account availability and ChatGPT usage.")
+        .configurationDisplayName(L10n.text("CLIProxy Pool", "CLIProxy 池"))
+        .description(L10n.text("Shows CLIProxyAPI account availability and ChatGPT usage.", "显示 CLIProxyAPI 账号可用性和 ChatGPT 用量。"))
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
