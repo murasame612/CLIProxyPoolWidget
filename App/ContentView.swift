@@ -277,6 +277,13 @@ struct SummaryView: View {
         Array(sorted(summary.accounts, by: sortMode, descending: accountSortDescending).prefix(max(1, accountDisplayLimit)))
     }
 
+    private var displayRows: [SummaryListRow] {
+        var rows: [SummaryListRow] = []
+        rows.append(contentsOf: sortedAccounts.map(SummaryListRow.account))
+        rows.append(contentsOf: summary.apiKeyUsages.map(SummaryListRow.apiKey))
+        return rows
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
@@ -289,65 +296,80 @@ struct SummaryView: View {
                 }
             }
 
-            if let error = summary.errorMessage, summary.xiaomiTokenPlan == nil {
+            if let error = summary.errorMessage,
+               summary.xiaomiTokenPlan == nil,
+               summary.apiKeyUsageSummary == nil {
                 ContentUnavailableView("Fetch failed", systemImage: "exclamationmark.triangle", description: Text(error))
-            } else if summary.totalAccounts == 0, summary.xiaomiTokenPlan == nil {
+            } else if summary.totalAccounts == 0,
+                      summary.xiaomiTokenPlan == nil,
+                      summary.apiKeyUsageSummary == nil {
                 ContentUnavailableView("No data yet", systemImage: "chart.bar", description: Text("Save settings and test the connection."))
             } else {
                 if let tokenPlan = summary.xiaomiTokenPlan {
                     XiaomiTokenPlanCard(snapshot: tokenPlan)
                 }
-
                 if let error = summary.errorMessage {
                     ContentUnavailableView("CLIProxy fetch failed", systemImage: "exclamationmark.triangle", description: Text(error))
-                } else if summary.totalAccounts > 0 {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Plus-base balance")
-                            .font(.headline)
-                        BalanceStack(
-                            primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
-                            primaryValue: summary.primaryRemainingUnits,
-                            primaryTotal: max(summary.primaryCapacityUnits, 1),
-                            primaryHint: summary.nextPrimaryResetHint,
-                            weeklyText: "\(formatPercent(summary.weeklyRemainingPercent))% / \(formatPercent(summary.weeklyCapacityPercent))%",
-                            weeklyValue: summary.weeklyRemainingUnits,
-                            weeklyTotal: max(summary.weeklyCapacityUnits, 1),
-                            weeklyHint: summary.nextWeeklyResetHint
-                        )
-                        PlanBreakdownView(breakdown: summary.planBreakdown)
+                } else {
+                    if summary.totalAccounts > 0 {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Plus-base balance")
+                                .font(.headline)
+                            BalanceStack(
+                                primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
+                                primaryValue: summary.primaryRemainingUnits,
+                                primaryTotal: max(summary.primaryCapacityUnits, 1),
+                                primaryHint: summary.nextPrimaryResetHint,
+                                weeklyText: "\(formatPercent(summary.weeklyRemainingPercent))% / \(formatPercent(summary.weeklyCapacityPercent))%",
+                                weeklyValue: summary.weeklyRemainingUnits,
+                                weeklyTotal: max(summary.weeklyCapacityUnits, 1),
+                                weeklyHint: summary.nextWeeklyResetHint
+                            )
+                            PlanBreakdownView(breakdown: summary.planBreakdown)
+                        }
                     }
-
                     HealthOverview(buckets: summary.recentRequests)
 
-                    HStack(spacing: 12) {
-                        MetricTile(title: "Available", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", systemImage: "checkmark.circle.fill", color: .green)
-                        MetricTile(title: "Cooling", value: "\(summary.coolingAccounts)", systemImage: "clock.fill", color: .orange)
-                        MetricTile(title: "Recent failed", value: "\(summary.failedRecentRequests)", systemImage: "xmark.octagon.fill", color: .red)
+                    if summary.totalAccounts > 0 {
+                        HStack(spacing: 12) {
+                            MetricTile(title: "Available", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", systemImage: "checkmark.circle.fill", color: .green)
+                            MetricTile(title: "Cooling", value: "\(summary.coolingAccounts)", systemImage: "clock.fill", color: .orange)
+                            MetricTile(title: "Recent failed", value: "\(summary.failedRecentRequests)", systemImage: "xmark.octagon.fill", color: .red)
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            Picker("Sort", selection: $accountSortMode) {
-                                ForEach(AccountSortMode.allCases) { mode in
-                                    Label(mode.title, systemImage: mode.systemImage)
-                                        .tag(mode.rawValue)
+                    if !displayRows.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if summary.totalAccounts > 0 {
+                                HStack(spacing: 8) {
+                                    Picker("Sort", selection: $accountSortMode) {
+                                        ForEach(AccountSortMode.allCases) { mode in
+                                            Label(mode.title, systemImage: mode.systemImage)
+                                                .tag(mode.rawValue)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+
+                                    Button {
+                                        accountSortDescending.toggle()
+                                    } label: {
+                                        Image(systemName: accountSortDescending ? "arrow.down" : "arrow.up")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .help(accountSortDescending ? "High to low" : "Low to high")
                                 }
                             }
-                            .pickerStyle(.segmented)
 
-                            Button {
-                                accountSortDescending.toggle()
-                            } label: {
-                                Image(systemName: accountSortDescending ? "arrow.down" : "arrow.up")
+                            List(displayRows) { row in
+                                switch row {
+                                case .apiKey(let apiKey):
+                                    APIKeyRow(snapshot: apiKey)
+                                case .account(let account):
+                                    AccountRow(account: account)
+                                }
                             }
-                            .buttonStyle(.bordered)
-                            .help(accountSortDescending ? "High to low" : "Low to high")
+                            .listStyle(.inset)
                         }
-
-                        List(sortedAccounts) { account in
-                            AccountRow(account: account)
-                        }
-                        .listStyle(.inset)
                     }
                 }
             }
@@ -400,6 +422,20 @@ struct SummaryView: View {
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name)
         }
         return lhsValue < rhsValue ? .orderedAscending : .orderedDescending
+    }
+}
+
+private enum SummaryListRow: Identifiable {
+    case apiKey(APIKeyUsageSnapshot)
+    case account(AccountUsage)
+
+    var id: String {
+        switch self {
+        case .apiKey(let snapshot):
+            return "api-key-\(snapshot.id)"
+        case .account(let account):
+            return "account-\(account.id)"
+        }
     }
 }
 
@@ -512,6 +548,100 @@ struct XiaomiTokenPlanCard: View {
     }
 }
 
+struct APIKeyUsageCard: View {
+    let summary: APIKeyUsageSummary
+
+    private var recentFailedCount: Int {
+        summary.recentRequests.reduce(0) { $0 + $1.failed }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("API Key Traffic", systemImage: "link.badge.plus")
+                    .font(.headline)
+                Spacer()
+                Text("\(summary.apiKeyCount) keys · \(summary.providerCount) providers")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                MetricPill(title: "Req", value: "\(summary.requests)")
+                MetricPill(title: "Fail", value: "\(summary.failedRequests)")
+                MetricPill(title: "OK", value: "\(summary.success)")
+            }
+
+            HStack(spacing: 12) {
+                Label("Status", systemImage: "waveform.path.ecg")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 70, alignment: .leading)
+                HealthTimeline(buckets: summary.recentRequests, height: 8, minCapsuleWidth: 4, maxCapsuleWidth: 16)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(recentFailedCount)")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(recentFailedCount > 0 ? .red : .secondary)
+                    Text("recent fail")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 80, alignment: .trailing)
+            }
+
+            if summary.hasTokenUsage {
+                Text("\(formatTokens(summary.tokens.totalTokens)) total tokens")
+                    .font(.title3.bold().monospacedDigit())
+                Text(
+                    "In \(formatTokens(summary.tokens.inputTokens)) · Out \(formatTokens(summary.tokens.outputTokens)) · Think \(formatTokens(summary.tokens.reasoningTokens)) · Cache \(formatTokens(summary.tokens.cachedTokens))"
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            } else {
+                Text("Token totals will appear after the pool API exposes runtime token usage on `api-key-usage`.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func formatTokens(_ value: Int64) -> String {
+        let count = Double(max(0, value))
+        switch count {
+        case 1_000_000_000...:
+            return String(format: "%.2fB", count / 1_000_000_000)
+        case 1_000_000...:
+            return String(format: "%.2fM", count / 1_000_000)
+        case 1_000...:
+            return String(format: "%.1fK", count / 1_000)
+        default:
+            return "\(value)"
+        }
+    }
+}
+
+struct MetricPill: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(.background.opacity(0.7), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct HealthOverview: View {
     let buckets: [RecentRequestBucket]
 
@@ -598,7 +728,7 @@ struct AccountRow: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let metrics = rowMetrics(for: proxy.size.width)
+            let metrics = summaryRowMetrics(for: proxy.size.width)
 
             ZStack(alignment: .leading) {
                 accountIdentity
@@ -657,20 +787,111 @@ struct AccountRow: View {
         }
     }
 
-    private func rowMetrics(for width: CGFloat) -> (centerWidth: CGFloat, sideWidth: CGFloat, rightWidth: CGFloat) {
-        let gap: CGFloat = width < 620 ? 10 : 14
-        let rightReadableWidth: CGFloat = 214
-        var centerWidth = min(240, max(120, width * 0.34))
-        let readableCenterWidth = width - (rightReadableWidth + gap) * 2
+}
 
-        if readableCenterWidth < centerWidth {
-            centerWidth = max(96, readableCenterWidth)
-        }
+struct APIKeyRow: View {
+    let snapshot: APIKeyUsageSnapshot
+    private let rowHeight: CGFloat = 58
 
-        let sideWidth = max(0, (width - centerWidth) / 2 - gap)
-        let rightWidth = min(220, sideWidth)
-        return (centerWidth, sideWidth, rightWidth)
+    private var recentFailureCount: Int {
+        snapshot.recentRequests.reduce(0) { $0 + $1.failed }
     }
+
+    private var statusText: String {
+        if recentFailureCount > 0 {
+            return "\(snapshot.providerDisplayName) · \(recentFailureCount) recent fail"
+        }
+        return snapshot.providerDisplayName
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let metrics = summaryRowMetrics(for: proxy.size.width)
+
+            ZStack(alignment: .leading) {
+                apiIdentity
+                    .frame(width: metrics.sideWidth, alignment: .leading)
+                    .position(x: metrics.sideWidth / 2, y: rowHeight / 2)
+
+                HealthTimeline(buckets: snapshot.recentRequests, height: 7, minCapsuleWidth: 3, maxCapsuleWidth: 12)
+                    .frame(width: metrics.centerWidth, alignment: .center)
+                    .position(x: proxy.size.width / 2, y: rowHeight / 2)
+
+                apiDetails
+                    .frame(width: metrics.rightWidth, alignment: .trailing)
+                    .position(x: proxy.size.width - metrics.rightWidth / 2, y: rowHeight / 2)
+            }
+        }
+        .frame(height: rowHeight)
+        .padding(.vertical, 4)
+    }
+
+    private var apiIdentity: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(recentFailureCount > 0 ? Color.yellow : Color.blue)
+                .frame(width: 9, height: 9)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(snapshot.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("API")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.12), in: Capsule())
+                }
+                Text(statusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var apiDetails: some View {
+        VStack(alignment: .trailing, spacing: 3) {
+            HStack(spacing: 10) {
+                apiMetric("Req", value: snapshot.totalRequests, color: .primary)
+                apiMetric("Fail", value: snapshot.runtimeFailedRequests, color: snapshot.runtimeFailedRequests > 0 ? .red : .secondary)
+                apiMetric("OK", value: snapshot.success, color: .green)
+            }
+            .font(.caption.monospacedDigit())
+
+            Text(snapshot.providerDisplayName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func apiMetric(_ title: String, value: Int, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Text("\(value)")
+                .foregroundStyle(color)
+        }
+    }
+}
+
+private func summaryRowMetrics(for width: CGFloat) -> (centerWidth: CGFloat, sideWidth: CGFloat, rightWidth: CGFloat) {
+    let gap: CGFloat = width < 620 ? 10 : 14
+    let rightReadableWidth: CGFloat = 214
+    var centerWidth = min(240, max(120, width * 0.34))
+    let readableCenterWidth = width - (rightReadableWidth + gap) * 2
+
+    if readableCenterWidth < centerWidth {
+        centerWidth = max(96, readableCenterWidth)
+    }
+
+    let sideWidth = max(0, (width - centerWidth) / 2 - gap)
+    let rightWidth = min(220, sideWidth)
+    return (centerWidth, sideWidth, rightWidth)
 }
 
 private extension AccountUsage {

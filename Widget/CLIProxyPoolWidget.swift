@@ -111,6 +111,8 @@ private extension PoolSummary {
             recentRequests: recentRequests,
             planBreakdown: planBreakdown,
             accounts: accounts,
+            apiKeyUsages: apiKeyUsages,
+            apiKeyUsageSummary: apiKeyUsageSummary,
             xiaomiTokenPlan: xiaomiTokenPlan,
             errorMessage: errorMessage
         )

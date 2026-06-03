@@ -256,11 +256,77 @@ struct RecentRequestBucket: Codable, Hashable {
     }
 }
 
-struct APIKeyUsageSnapshot: Codable, Hashable {
+struct APIKeyUsageSnapshot: Codable, Hashable, Identifiable {
+    let id: String
     let provider: String
+    let keyIdentifier: String
     let success: Int
     let failed: Int
     let recentRequests: [RecentRequestBucket]
+    let tokens: APIKeyTokenTotals?
+    let requests: Int?
+    let failedRequests: Int?
+
+    var displayName: String {
+        let trimmed = keyIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return providerDisplayName
+        }
+        if trimmed.count <= 8 {
+            return trimmed
+        }
+        return "\(trimmed.prefix(4))…\(trimmed.suffix(4))"
+    }
+
+    var providerDisplayName: String {
+        let normalized = provider.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            return "API"
+        }
+        return normalized
+            .split(separator: "-", omittingEmptySubsequences: true)
+            .map { part in part.prefix(1).uppercased() + part.dropFirst().lowercased() }
+            .joined(separator: " ")
+    }
+
+    var totalRequests: Int {
+        requests ?? (success + failed)
+    }
+
+    var runtimeFailedRequests: Int {
+        failedRequests ?? failed
+    }
+}
+
+struct APIKeyTokenTotals: Codable, Hashable {
+    let inputTokens: Int64
+    let outputTokens: Int64
+    let reasoningTokens: Int64
+    let cachedTokens: Int64
+    let totalTokens: Int64
+
+    var hasUsage: Bool {
+        inputTokens > 0 ||
+        outputTokens > 0 ||
+        reasoningTokens > 0 ||
+        cachedTokens > 0 ||
+        totalTokens > 0
+    }
+}
+
+struct APIKeyUsageSummary: Codable, Hashable {
+    let apiKeyCount: Int
+    let providerCount: Int
+    let success: Int
+    let failed: Int
+    let requests: Int
+    let failedRequests: Int
+    let recentRequests: [RecentRequestBucket]
+    let tokens: APIKeyTokenTotals
+
+    var hasTokenUsage: Bool {
+        tokens.hasUsage
+    }
 }
 
 struct CodexIDToken: Decodable, Hashable {
@@ -671,6 +737,8 @@ struct PoolSummary: Codable, Hashable {
     let recentRequests: [RecentRequestBucket]
     let planBreakdown: [PlanBreakdown]
     let accounts: [AccountUsage]
+    let apiKeyUsages: [APIKeyUsageSnapshot]
+    let apiKeyUsageSummary: APIKeyUsageSummary?
     let xiaomiTokenPlan: XiaomiTokenPlanSnapshot?
     let errorMessage: String?
 
@@ -698,6 +766,8 @@ struct PoolSummary: Codable, Hashable {
         recentRequests: [],
         planBreakdown: [],
         accounts: [],
+        apiKeyUsages: [],
+        apiKeyUsageSummary: nil,
         xiaomiTokenPlan: nil,
         errorMessage: nil
     )

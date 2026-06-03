@@ -58,12 +58,17 @@ struct PoolAPIClient {
         let data = try await data(for: request)
         let response = try JSONDecoder().decode([String: [String: APIKeyUsageEntry]].self, from: data)
         return response.flatMap { provider, entries in
-            entries.values.map { entry in
+            entries.map { keyIdentifier, entry in
                 APIKeyUsageSnapshot(
+                    id: "\(provider):\(keyIdentifier)",
                     provider: provider,
+                    keyIdentifier: keyIdentifier,
                     success: entry.success,
                     failed: entry.failed,
-                    recentRequests: entry.recentRequests
+                    recentRequests: entry.recentRequests,
+                    tokens: entry.tokens,
+                    requests: entry.requests,
+                    failedRequests: entry.failedRequests
                 )
             }
         }
@@ -260,11 +265,17 @@ struct PoolAPIClient {
         let success: Int
         let failed: Int
         let recentRequests: [RecentRequestBucket]
+        let tokens: APIKeyTokenTotals?
+        let requests: Int?
+        let failedRequests: Int?
 
         enum CodingKeys: String, CodingKey {
             case success
             case failed
             case recentRequests = "recent_requests"
+            case tokens
+            case requests
+            case failedRequests = "failed_requests"
         }
     }
 

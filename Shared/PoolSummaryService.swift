@@ -9,6 +9,7 @@ struct PoolSummaryService {
         async let apiKeyUsage = loadAPIKeyUsageIfNeeded()
 
         if !client.settings.isConfigured {
+            let resolvedAPIKeyUsage = await apiKeyUsage
             return PoolSummary(
                 generatedAt: Date(),
                 totalAccounts: 0,
@@ -25,6 +26,8 @@ struct PoolSummaryService {
                 recentRequests: [],
                 planBreakdown: [],
                 accounts: [],
+                apiKeyUsages: resolvedAPIKeyUsage,
+                apiKeyUsageSummary: summarizeAPIKeyUsage(resolvedAPIKeyUsage),
                 xiaomiTokenPlan: await xiaomiTokenPlan,
                 errorMessage: nil
             )
@@ -36,6 +39,7 @@ struct PoolSummaryService {
 
             let xiaomi = await xiaomiTokenPlan
             let apiKeyUsages = await apiKeyUsage
+            let apiKeyUsageSummary = summarizeAPIKeyUsage(apiKeyUsages)
             let fileRecentRequests = visibleFiles.map { recentRequestBuckets(for: $0) }
             let apiKeyRecentRequests = mergeRecentRequests(from: apiKeyUsages.map(\.recentRequests), limit: 20)
             let accounts = await loadAccountUsage(for: visibleFiles, apiKeyRecentRequests: apiKeyRecentRequests)
@@ -84,6 +88,8 @@ struct PoolSummaryService {
                 recentRequests: recentRequests,
                 planBreakdown: breakdown,
                 accounts: accounts,
+                apiKeyUsages: apiKeyUsages,
+                apiKeyUsageSummary: apiKeyUsageSummary,
                 xiaomiTokenPlan: xiaomi,
                 errorMessage: nil
             )
@@ -105,10 +111,54 @@ struct PoolSummaryService {
                 recentRequests: [],
                 planBreakdown: [],
                 accounts: [],
+                apiKeyUsages: [],
+                apiKeyUsageSummary: nil,
                 xiaomiTokenPlan: xiaomi,
                 errorMessage: error.localizedDescription
             )
         }
+    }
+
+    private func summarizeAPIKeyUsage(_ snapshots: [APIKeyUsageSnapshot]) -> APIKeyUsageSummary? {
+        guard !snapshots.isEmpty else {
+            return nil
+        }
+
+        let providerCount = Set(snapshots.map(\.provider)).count
+        let success = snapshots.reduce(0) { $0 + $1.success }
+        let failed = snapshots.reduce(0) { $0 + $1.failed }
+        let requests = snapshots.reduce(0) { $0 + $1.totalRequests }
+        let failedRequests = snapshots.reduce(0) { $0 + $1.runtimeFailedRequests }
+        let recentRequests = mergeRecentRequests(from: snapshots.map(\.recentRequests), limit: 20)
+        let tokens = snapshots.reduce(
+            APIKeyTokenTotals(inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0, totalTokens: 0)
+        ) { partial, snapshot in
+            let current = snapshot.tokens ?? APIKeyTokenTotals(
+                inputTokens: 0,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cachedTokens: 0,
+                totalTokens: 0
+            )
+            return APIKeyTokenTotals(
+                inputTokens: partial.inputTokens + current.inputTokens,
+                outputTokens: partial.outputTokens + current.outputTokens,
+                reasoningTokens: partial.reasoningTokens + current.reasoningTokens,
+                cachedTokens: partial.cachedTokens + current.cachedTokens,
+                totalTokens: partial.totalTokens + current.totalTokens
+            )
+        }
+
+        return APIKeyUsageSummary(
+            apiKeyCount: snapshots.count,
+            providerCount: providerCount,
+            success: success,
+            failed: failed,
+            requests: requests,
+            failedRequests: failedRequests,
+            recentRequests: recentRequests,
+            tokens: tokens
+        )
     }
 
     private func loadAPIKeyUsageIfNeeded() async -> [APIKeyUsageSnapshot] {
