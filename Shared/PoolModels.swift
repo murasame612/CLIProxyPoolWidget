@@ -73,6 +73,7 @@ struct PoolSettings: Codable, Equatable {
     var xiaomiTokenPlanEnabled: Bool
     var xiaomiCookie: String
     var preferredLanguageCode: String
+    var ignoredAPIKeyIDs: [String]
 
     static let empty = PoolSettings(
         baseURL: PoolWatchConstants.defaultBaseURL,
@@ -88,7 +89,8 @@ struct PoolSettings: Codable, Equatable {
         weeklyKillLinePercent: PoolWatchConstants.defaultWeeklyKillLinePercent,
         xiaomiTokenPlanEnabled: false,
         xiaomiCookie: "",
-        preferredLanguageCode: AppLanguagePreference.auto.rawValue
+        preferredLanguageCode: AppLanguagePreference.auto.rawValue,
+        ignoredAPIKeyIDs: []
     )
 
     var isConfigured: Bool {
@@ -127,6 +129,7 @@ struct PoolSettings: Codable, Equatable {
         case xiaomiTokenPlanEnabled
         case xiaomiCookie
         case preferredLanguageCode
+        case ignoredAPIKeyIDs
     }
 
     init(
@@ -143,7 +146,8 @@ struct PoolSettings: Codable, Equatable {
         weeklyKillLinePercent: Double,
         xiaomiTokenPlanEnabled: Bool,
         xiaomiCookie: String,
-        preferredLanguageCode: String
+        preferredLanguageCode: String,
+        ignoredAPIKeyIDs: [String]
     ) {
         self.baseURL = baseURL
         self.managementKey = managementKey
@@ -159,6 +163,7 @@ struct PoolSettings: Codable, Equatable {
         self.xiaomiTokenPlanEnabled = xiaomiTokenPlanEnabled
         self.xiaomiCookie = xiaomiCookie
         self.preferredLanguageCode = preferredLanguageCode
+        self.ignoredAPIKeyIDs = ignoredAPIKeyIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -177,6 +182,7 @@ struct PoolSettings: Codable, Equatable {
         xiaomiTokenPlanEnabled = try container.decodeIfPresent(Bool.self, forKey: .xiaomiTokenPlanEnabled) ?? Self.empty.xiaomiTokenPlanEnabled
         xiaomiCookie = try container.decodeIfPresent(String.self, forKey: .xiaomiCookie) ?? Self.empty.xiaomiCookie
         preferredLanguageCode = try container.decodeIfPresent(String.self, forKey: .preferredLanguageCode) ?? Self.empty.preferredLanguageCode
+        ignoredAPIKeyIDs = try container.decodeIfPresent([String].self, forKey: .ignoredAPIKeyIDs) ?? []
     }
 }
 

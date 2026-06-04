@@ -307,6 +307,7 @@ struct SummaryView: View {
     let summary: PoolSummary
     let isLoading: Bool
     let accountDisplayLimit: Int
+    @EnvironmentObject private var settingsStore: SettingsStore
     @AppStorage("accountSortMode") private var accountSortMode = AccountSortMode.fiveHour.rawValue
     @AppStorage("accountSortDescending") private var accountSortDescending = true
 
@@ -321,7 +322,8 @@ struct SummaryView: View {
     private var displayRows: [SummaryListRow] {
         var rows: [SummaryListRow] = []
         rows.append(contentsOf: sortedAccounts.map(SummaryListRow.account))
-        rows.append(contentsOf: summary.apiKeyUsages.map(SummaryListRow.apiKey))
+        let ignored = Set(settingsStore.settings.ignoredAPIKeyIDs)
+        rows.append(contentsOf: summary.apiKeyUsages.filter { !ignored.contains($0.id) }.map(SummaryListRow.apiKey))
         return rows
     }
 
@@ -824,6 +826,7 @@ struct AccountRow: View {
 
 struct APIKeyRow: View {
     let snapshot: APIKeyUsageSnapshot
+    @EnvironmentObject private var settingsStore: SettingsStore
     private let rowHeight: CGFloat = 58
 
     private var recentFailureCount: Int {
@@ -859,6 +862,23 @@ struct APIKeyRow: View {
         }
         .frame(height: rowHeight)
         .padding(.vertical, 4)
+        .contextMenu {
+            let isBlocked = settingsStore.settings.ignoredAPIKeyIDs.contains(snapshot.id)
+            Button {
+                var ids = settingsStore.settings.ignoredAPIKeyIDs
+                if isBlocked {
+                    ids.removeAll { $0 == snapshot.id }
+                } else {
+                    ids.append(snapshot.id)
+                }
+                settingsStore.settings.ignoredAPIKeyIDs = ids
+            } label: {
+                Label(
+                    isBlocked ? L10n.text("Show this key", "恢复显示此密钥") : L10n.text("Hide this key", "不再显示此密钥"),
+                    systemImage: isBlocked ? "eye" : "eye.slash"
+                )
+            }
+        }
     }
 
     private var apiIdentity: some View {

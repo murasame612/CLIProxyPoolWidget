@@ -69,7 +69,8 @@ final class PoolRefreshCoordinator: ObservableObject {
             weeklyKillLinePercent: max(0, settings.weeklyKillLinePercent),
             xiaomiTokenPlanEnabled: settings.xiaomiTokenPlanEnabled,
             xiaomiCookie: settings.xiaomiCookie.trimmingCharacters(in: .whitespacesAndNewlines),
-            preferredLanguageCode: AppLanguagePreference(rawValue: settings.preferredLanguageCode)?.rawValue ?? AppLanguagePreference.auto.rawValue
+            preferredLanguageCode: AppLanguagePreference(rawValue: settings.preferredLanguageCode)?.rawValue ?? AppLanguagePreference.auto.rawValue,
+            ignoredAPIKeyIDs: settings.ignoredAPIKeyIDs
         )
     }
 
