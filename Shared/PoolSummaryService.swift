@@ -53,14 +53,19 @@ struct PoolSummaryService {
             }
             let recentRequests = mergeRecentRequests(from: recentBucketSources, limit: 20)
             let activeAccounts = accounts.filter(\.isAvailable)
-            let weightedCapacity = activeAccounts.reduce(0) { $0 + $1.weight }
+            let primaryCapacity = activeAccounts.reduce(0) { total, account in
+                account.usage?.primaryRemainingPercent == nil ? total : total + account.weight
+            }
+            let weeklyCapacity = activeAccounts.reduce(0) { total, account in
+                account.usage?.weeklyRemainingPercent == nil ? total : total + account.weight
+            }
             let primaryRemaining = activeAccounts.reduce(0) { $0 + $1.primaryWeightedRemaining }
             let weeklyRemaining = activeAccounts.reduce(0) { $0 + $1.weeklyWeightedRemaining }
             let breakdown = makePlanBreakdown(from: activeAccounts)
             let primaryResetHint = makeResetHint(
                 from: activeAccounts.flatMap(primaryResetEvents(for:)),
                 currentUnits: primaryRemaining,
-                capacityUnits: weightedCapacity
+                capacityUnits: primaryCapacity
             )
             let weeklyResetHint = makeResetHint(
                 from: activeAccounts.compactMap { account in
@@ -70,7 +75,7 @@ struct PoolSummaryService {
                     return ResetEvent(secondsUntil: seconds, restoredUnits: account.weeklyResetRestoredUnits)
                 },
                 currentUnits: weeklyRemaining,
-                capacityUnits: weightedCapacity
+                capacityUnits: weeklyCapacity
             )
 
             return PoolSummary(
@@ -81,9 +86,9 @@ struct PoolSummaryService {
                 disabledAccounts: disabled,
                 failedRecentRequests: failedRecent,
                 primaryRemainingUnits: primaryRemaining,
-                primaryCapacityUnits: weightedCapacity,
+                primaryCapacityUnits: primaryCapacity,
                 weeklyRemainingUnits: weeklyRemaining,
-                weeklyCapacityUnits: weightedCapacity,
+                weeklyCapacityUnits: weeklyCapacity,
                 nextPrimaryResetHint: primaryResetHint,
                 nextWeeklyResetHint: weeklyResetHint,
                 recentRequests: recentRequests,

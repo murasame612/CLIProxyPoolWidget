@@ -82,33 +82,76 @@ enum UsageParser {
     }
 
     private static func parseWhamUsage(from pairs: [(String, Any)]) -> UsageSnapshot? {
-        let primaryUsedPercent = number(at: "rate_limit.primary_window.used_percent", in: pairs)
-        let secondaryUsedPercent = number(at: "rate_limit.secondary_window.used_percent", in: pairs)
-        let usedPercent = primaryUsedPercent ?? secondaryUsedPercent
-        let primaryResetSeconds = number(at: "rate_limit.primary_window.reset_after_seconds", in: pairs)
-        let secondaryResetSeconds = number(at: "rate_limit.secondary_window.reset_after_seconds", in: pairs)
-        let resetSeconds = primaryResetSeconds ?? secondaryResetSeconds
+        let primarySlot = whamWindow(at: "rate_limit.primary_window", in: pairs)
+        let secondarySlot = whamWindow(at: "rate_limit.secondary_window", in: pairs)
         let planType = string(at: "plan_type", in: pairs) ?? string(at: "account_plan.plan_type", in: pairs)
 
-        if usedPercent == nil && resetSeconds == nil {
+        if primarySlot == nil && secondarySlot == nil {
             return nil
         }
+
+        var primaryWindow: WhamWindow?
+        var weeklyWindow: WhamWindow?
+        assign(primarySlot, legacyWeekly: false, primary: &primaryWindow, weekly: &weeklyWindow)
+        assign(secondarySlot, legacyWeekly: true, primary: &primaryWindow, weekly: &weeklyWindow)
+        let resetSeconds = primaryWindow?.resetSeconds ?? weeklyWindow?.resetSeconds
 
         return UsageSnapshot(
             used: nil,
             limit: nil,
             remaining: nil,
-            usedPercent: usedPercent,
+            usedPercent: nil,
             planType: planType,
-            primaryUsedPercent: primaryUsedPercent,
-            primaryResetSeconds: primaryResetSeconds,
-            primaryResetText: primaryResetSeconds.map(formatDuration(seconds:)),
-            weeklyUsedPercent: secondaryUsedPercent,
-            weeklyResetSeconds: secondaryResetSeconds,
-            weeklyResetText: secondaryResetSeconds.map(formatDuration(seconds:)),
+            primaryUsedPercent: primaryWindow?.usedPercent,
+            primaryResetSeconds: primaryWindow?.resetSeconds,
+            primaryResetText: primaryWindow?.resetSeconds.map(formatDuration(seconds:)),
+            weeklyUsedPercent: weeklyWindow?.usedPercent,
+            weeklyResetSeconds: weeklyWindow?.resetSeconds,
+            weeklyResetText: weeklyWindow?.resetSeconds.map(formatDuration(seconds:)),
             resetText: resetSeconds.map(formatDuration(seconds:)),
             rawStatus: PlanType.displayName(planType)
         )
+    }
+
+    private struct WhamWindow {
+        let usedPercent: Double?
+        let resetSeconds: Double?
+        let limitSeconds: Double?
+    }
+
+    private static func whamWindow(at path: String, in pairs: [(String, Any)]) -> WhamWindow? {
+        let usedPercent = number(at: path + ".used_percent", in: pairs)
+        let resetSeconds = number(at: path + ".reset_after_seconds", in: pairs)
+        let limitSeconds = number(at: path + ".limit_window_seconds", in: pairs)
+        guard usedPercent != nil || resetSeconds != nil || limitSeconds != nil else {
+            return nil
+        }
+        return WhamWindow(
+            usedPercent: usedPercent,
+            resetSeconds: resetSeconds,
+            limitSeconds: limitSeconds
+        )
+    }
+
+    private static func assign(
+        _ window: WhamWindow?,
+        legacyWeekly: Bool,
+        primary: inout WhamWindow?,
+        weekly: inout WhamWindow?
+    ) {
+        guard let window else {
+            return
+        }
+
+        // Window names are positional only in legacy payloads. When a plan no
+        // longer has a 5h allowance, OpenAI may put the sole 7-day window in
+        // primary_window, so the fixed window length is the reliable identity.
+        let isWeekly = window.limitSeconds.map { $0 >= 24 * 60 * 60 } ?? legacyWeekly
+        if isWeekly {
+            weekly = window
+        } else {
+            primary = window
+        }
     }
 
     private static func flatten(_ value: Any, path: String = "") -> [(String, Any)] {

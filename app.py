@@ -247,21 +247,24 @@ class UsageSnapshot:
             self.primary_reset_seconds is not None,
             self.weekly_used_percent is not None,
             self.weekly_reset_seconds is not None,
-            self.plan_type is not None,
         ])
 
     @property
     def weekly_remaining_percent(self) -> Optional[float]:
         if self.weekly_used_percent is not None:
             return max(0, min(100, 100 - self.weekly_used_percent))
-        return self.remaining
+        return None
 
     @property
     def primary_remaining_percent(self) -> Optional[float]:
         up = self.primary_used_percent if self.primary_used_percent is not None else self.used_percent
         if up is not None:
             return max(0, min(100, 100 - up))
-        return self.remaining
+        if self.remaining is not None and self.limit is not None and self.limit > 0:
+            return max(0, min(100, self.remaining / self.limit * 100))
+        if self.remaining is not None:
+            return max(0, min(100, self.remaining))
+        return None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -541,27 +544,47 @@ class UsageParser:
                     return v
             return None
 
-        primary_used = num("rate_limit.primary_window.used_percent")
-        secondary_used = num("rate_limit.secondary_window.used_percent")
-        used_percent = primary_used if primary_used is not None else secondary_used
-        primary_reset = num("rate_limit.primary_window.reset_after_seconds")
-        secondary_reset = num("rate_limit.secondary_window.reset_after_seconds")
-        reset_seconds = primary_reset if primary_reset is not None else secondary_reset
+        primary_slot = (
+            num("rate_limit.primary_window.used_percent"),
+            num("rate_limit.primary_window.reset_after_seconds"),
+            num("rate_limit.primary_window.limit_window_seconds"),
+        )
+        secondary_slot = (
+            num("rate_limit.secondary_window.used_percent"),
+            num("rate_limit.secondary_window.reset_after_seconds"),
+            num("rate_limit.secondary_window.limit_window_seconds"),
+        )
         plan_type = txt("plan_type") or txt("account_plan.plan_type")
 
-        if used_percent is None and reset_seconds is None:
+        if all(value is None for value in primary_slot + secondary_slot):
             return None
+
+        primary_window = None
+        weekly_window = None
+        for window, legacy_weekly in ((primary_slot, False), (secondary_slot, True)):
+            used, reset, limit_seconds = window
+            if used is None and reset is None and limit_seconds is None:
+                continue
+            is_weekly = limit_seconds >= 24 * 60 * 60 if limit_seconds is not None else legacy_weekly
+            if is_weekly:
+                weekly_window = window
+            else:
+                primary_window = window
+
+        primary_used, primary_reset, _ = primary_window or (None, None, None)
+        weekly_used, weekly_reset, _ = weekly_window or (None, None, None)
+        reset_seconds = primary_reset if primary_reset is not None else weekly_reset
 
         return UsageSnapshot(
             used=None, limit=None, remaining=None,
-            used_percent=used_percent,
+            used_percent=None,
             plan_type=plan_type,
             primary_used_percent=primary_used,
             primary_reset_seconds=primary_reset,
             primary_reset_text=UsageParser._format_duration(primary_reset) if primary_reset else None,
-            weekly_used_percent=secondary_used,
-            weekly_reset_seconds=secondary_reset,
-            weekly_reset_text=UsageParser._format_duration(secondary_reset) if secondary_reset else None,
+            weekly_used_percent=weekly_used,
+            weekly_reset_seconds=weekly_reset,
+            weekly_reset_text=UsageParser._format_duration(weekly_reset) if weekly_reset else None,
             reset_text=UsageParser._format_duration(reset_seconds) if reset_seconds else None,
             raw_status=PlanType.display_name(plan_type),
         )
@@ -892,14 +915,21 @@ class PoolSummaryService:
             )
             recent_requests = self._merge_recent_requests(visible, RECENT_REQUEST_BUCKET_COUNT)
             active = [a for a in accounts if a.is_available]
-            capacity = sum(a.weight for a in active)
+            primary_capacity = sum(
+                a.weight for a in active
+                if a.usage is not None and a.usage.primary_remaining_percent is not None
+            )
+            weekly_capacity = sum(
+                a.weight for a in active
+                if a.usage is not None and a.usage.weekly_remaining_percent is not None
+            )
             primary_remaining = sum(a.primary_weighted_remaining for a in active)
             weekly_remaining = sum(a.weekly_weighted_remaining for a in active)
             breakdown = self._plan_breakdown(active)
             primary_hint = self._reset_hint(
                 self._primary_reset_events(active),
                 primary_remaining,
-                capacity,
+                primary_capacity,
             )
             weekly_hint = self._reset_hint(
                 [
@@ -908,7 +938,7 @@ class PoolSummaryService:
                     if a.usage and a.usage.weekly_reset_seconds is not None
                 ],
                 weekly_remaining,
-                capacity,
+                weekly_capacity,
             )
 
             return PoolSummary(
@@ -919,9 +949,9 @@ class PoolSummaryService:
                 disabled_accounts=disabled,
                 failed_recent_requests=failed_recent,
                 primary_remaining_units=primary_remaining,
-                primary_capacity_units=capacity,
+                primary_capacity_units=primary_capacity,
                 weekly_remaining_units=weekly_remaining,
-                weekly_capacity_units=capacity,
+                weekly_capacity_units=weekly_capacity,
                 next_primary_reset_hint=primary_hint,
                 next_weekly_reset_hint=weekly_hint,
                 recent_requests=recent_requests,
@@ -1442,6 +1472,10 @@ function renderSummary(d, warningMessage) {
   const pcp = d.primary_capacity_percent;
   const wHint = d.next_weekly_reset_hint;
   const pHint = d.next_primary_reset_hint;
+  const hasPrimaryQuota = Number(d.primary_capacity_units || 0) > 0;
+  const hasWeeklyQuota = Number(d.weekly_capacity_units || 0) > 0;
+  if(sortMode === 'fiveHour' && !hasPrimaryQuota) sortMode = hasWeeklyQuota ? 'week' : 'name';
+  if(sortMode === 'week' && !hasWeeklyQuota) sortMode = hasPrimaryQuota ? 'fiveHour' : 'name';
 
   let html = '<div class="summary">';
   html += '<div class="overview-title"><h1>概览</h1><span>更新时间 ' + new Date(d.generated_at*1000).toLocaleTimeString() + '</span></div>';
@@ -1454,23 +1488,30 @@ function renderSummary(d, warningMessage) {
   html += '</div>';
 
   html += '<div class="bar-stack">';
-  html += '<div class="bar-section" id="primary-bar-section">';
-  html += '<div class="bar-header"><span class="label">5h</span><span class="value" id="primary-bar-text">'+fmt(pp)+'% / '+fmt(pcp)+'%</span></div>';
-  html += renderBigBar(pbp, pHint, d.primary_capacity_units, 'primary');
-  if(pHint) html += '<div class="reset-hint primary">'+pHint.account_count+' 个账号恢复 +' + fmt(pHint.restored_units*100) + '%，' + pHint.time_text + '</div>';
+  if(hasPrimaryQuota) {
+    html += '<div class="bar-section" id="primary-bar-section">';
+    html += '<div class="bar-header"><span class="label">5h</span><span class="value" id="primary-bar-text">'+fmt(pp)+'% / '+fmt(pcp)+'%</span></div>';
+    html += renderBigBar(pbp, pHint, d.primary_capacity_units, 'primary');
+    if(pHint) html += '<div class="reset-hint primary">'+pHint.account_count+' 个账号恢复 +' + fmt(pHint.restored_units*100) + '%，' + pHint.time_text + '</div>';
+    html += '</div>';
+  }
+  if(hasWeeklyQuota) {
+    html += '<div class="bar-section" id="weekly-bar-section">';
+    html += '<div class="bar-header"><span class="label">周额度</span><span class="value" id="weekly-bar-text">'+fmt(wp)+'% / '+fmt(wcp)+'%</span></div>';
+    html += renderBigBar(wbp, wHint, d.weekly_capacity_units, 'weekly');
+    if(wHint) html += '<div class="reset-hint weekly">'+wHint.account_count+' 个账号恢复 +' + fmt(wHint.restored_units*100) + '%，' + wHint.time_text + '</div>';
+    html += '</div>';
+  }
   html += '</div>';
-  html += '<div class="bar-section" id="weekly-bar-section">';
-  html += '<div class="bar-header"><span class="label">周额度</span><span class="value" id="weekly-bar-text">'+fmt(wp)+'% / '+fmt(wcp)+'%</span></div>';
-  html += renderBigBar(wbp, wHint, d.weekly_capacity_units, 'weekly');
-  if(wHint) html += '<div class="reset-hint weekly">'+wHint.account_count+' 个账号恢复 +' + fmt(wHint.restored_units*100) + '%，' + wHint.time_text + '</div>';
-  html += '</div></div>';
 
   html += renderHealthOverview(d.recent_requests || []);
 
   html += '<div class="account-panel">';
   html += '<div class="account-toolbar"><h3>账号</h3>';
   html += '<div class="sort-controls"><div class="segmented">';
-  html += sortButton('fiveHour', '5h') + sortButton('week', '周额度') + sortButton('name', '名称');
+  if(hasPrimaryQuota) html += sortButton('fiveHour', '5h');
+  if(hasWeeklyQuota) html += sortButton('week', '周额度');
+  html += sortButton('name', '名称');
   html += '</div><button class="sort-dir" onclick="toggleSortDir()" title="切换排序方向">'+(sortDescending ? '↓' : '↑')+'</button></div></div>';
   html += '<div class="account-list">';
   const accounts = sortedAccounts(d.accounts || []).slice(0, Math.max(1, d.usage_account_limit || 8));
@@ -1483,7 +1524,10 @@ function renderSummary(d, warningMessage) {
       const ppct = b.primary_remaining_units * 100;
       const wpct = b.weekly_remaining_units * 100;
       html += '<div class="row"><span>'+planBadge(b.plan_type)+' <b>x'+b.count+'</b>（倍率 '+fmt(b.weight)+'）</span>';
-      html += '<span><span style="color:#0d6efd">5h '+fmt(ppct)+'%</span> &nbsp; <span style="color:#6f42c1">周 '+fmt(wpct)+'%</span></span></div>';
+      const quotaParts = [];
+      if(hasPrimaryQuota) quotaParts.push('<span style="color:#0d6efd">5h '+fmt(ppct)+'%</span>');
+      if(hasWeeklyQuota) quotaParts.push('<span style="color:#6f42c1">周 '+fmt(wpct)+'%</span>');
+      html += '<span>' + quotaParts.join(' &nbsp; ') + '</span></div>';
     }
     html += '</div>';
   }
@@ -1552,9 +1596,12 @@ function renderAccountRow(a) {
   html += '<div class="account-status">'+esc(a.status_text || '')+(a.error?' · 请求失败':'')+'</div></div></div>';
   html += '<div class="account-health"><div class="health-timeline">'+renderHealthPills(a.recent_requests || [], true)+'</div></div>';
   html += '<div class="account-right">';
-  html += usageLine('5h', pr, primaryText, primaryMuted);
-  html += usageLine('周', wr, fmt(wr)+'%', false);
-  if(a.primary_reset_text && a.weekly_reset_text) html += '<div class="usage-reset">5h ' + esc(a.primary_reset_text) + ' · 周 ' + esc(a.weekly_reset_text) + '</div>';
+  if(pr !== null && pr !== undefined) html += usageLine('5h', pr, primaryText, primaryMuted);
+  if(wr !== null && wr !== undefined) html += usageLine('周', wr, fmt(wr)+'%', false);
+  const resetParts = [];
+  if(a.primary_reset_text) resetParts.push('5h ' + esc(a.primary_reset_text));
+  if(a.weekly_reset_text) resetParts.push('周 ' + esc(a.weekly_reset_text));
+  if(resetParts.length) html += '<div class="usage-reset">' + resetParts.join(' · ') + '</div>';
   html += '</div></div>';
   return html;
 }

@@ -311,8 +311,28 @@ struct SummaryView: View {
     @AppStorage("accountSortMode") private var accountSortMode = AccountSortMode.fiveHour.rawValue
     @AppStorage("accountSortDescending") private var accountSortDescending = true
 
+    private var availableSortModes: [AccountSortMode] {
+        var modes: [AccountSortMode] = []
+        if summary.hasPrimaryQuota {
+            modes.append(.fiveHour)
+        }
+        if summary.hasWeeklyQuota {
+            modes.append(.week)
+        }
+        modes.append(.name)
+        return modes
+    }
+
     private var sortMode: AccountSortMode {
-        AccountSortMode(rawValue: accountSortMode) ?? .fiveHour
+        let selected = AccountSortMode(rawValue: accountSortMode)
+        return availableSortModes.first(where: { $0 == selected }) ?? availableSortModes[0]
+    }
+
+    private var sortModeBinding: Binding<String> {
+        Binding(
+            get: { sortMode.rawValue },
+            set: { accountSortMode = $0 }
+        )
     }
 
     private var sortedAccounts: [AccountUsage] {
@@ -360,19 +380,27 @@ struct SummaryView: View {
                 } else {
                     if summary.totalAccounts > 0 {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text(L10n.text("Plus-base balance", "Plus 基础额度"))
-                                .font(.headline)
-                            BalanceStack(
-                                primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
-                                primaryValue: summary.primaryRemainingUnits,
-                                primaryTotal: max(summary.primaryCapacityUnits, 1),
-                                primaryHint: summary.nextPrimaryResetHint,
-                                weeklyText: "\(formatPercent(summary.weeklyRemainingPercent))% / \(formatPercent(summary.weeklyCapacityPercent))%",
-                                weeklyValue: summary.weeklyRemainingUnits,
-                                weeklyTotal: max(summary.weeklyCapacityUnits, 1),
-                                weeklyHint: summary.nextWeeklyResetHint
-                            )
-                            PlanBreakdownView(breakdown: summary.planBreakdown)
+                            if summary.hasPrimaryQuota || summary.hasWeeklyQuota {
+                                Text(L10n.text("Plus-base balance", "Plus 基础额度"))
+                                    .font(.headline)
+                                BalanceStack(
+                                    showsPrimary: summary.hasPrimaryQuota,
+                                    primaryText: "\(formatPercent(summary.primaryRemainingPercent))% / \(formatPercent(summary.primaryCapacityPercent))%",
+                                    primaryValue: summary.primaryRemainingUnits,
+                                    primaryTotal: max(summary.primaryCapacityUnits, 1),
+                                    primaryHint: summary.nextPrimaryResetHint,
+                                    showsWeekly: summary.hasWeeklyQuota,
+                                    weeklyText: "\(formatPercent(summary.weeklyRemainingPercent))% / \(formatPercent(summary.weeklyCapacityPercent))%",
+                                    weeklyValue: summary.weeklyRemainingUnits,
+                                    weeklyTotal: max(summary.weeklyCapacityUnits, 1),
+                                    weeklyHint: summary.nextWeeklyResetHint
+                                )
+                                PlanBreakdownView(
+                                    breakdown: summary.planBreakdown,
+                                    showsPrimary: summary.hasPrimaryQuota,
+                                    showsWeekly: summary.hasWeeklyQuota
+                                )
+                            }
                         }
                     }
                     HealthOverview(buckets: summary.recentRequests)
@@ -381,8 +409,8 @@ struct SummaryView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             if summary.totalAccounts > 0 {
                                 HStack(spacing: 8) {
-                                    Picker(L10n.text("Sort", "排序"), selection: $accountSortMode) {
-                                        ForEach(AccountSortMode.allCases) { mode in
+                                    Picker(L10n.text("Sort", "排序"), selection: sortModeBinding) {
+                                        ForEach(availableSortModes) { mode in
                                             Label(mode.title, systemImage: mode.systemImage)
                                                 .tag(mode.rawValue)
                                         }
@@ -807,9 +835,8 @@ struct AccountRow: View {
     private var quotaDetails: some View {
         VStack(alignment: .trailing, spacing: 3) {
             UsageStack(account: account)
-            if let primaryReset = account.usage?.primaryResetText,
-               let weeklyReset = account.usage?.weeklyResetText {
-                Text(L10n.isChinese ? "5h \(primaryReset) · 周 \(weeklyReset)" : "5h \(primaryReset) · week \(weeklyReset)")
+            if let quotaResetText {
+                Text(quotaResetText)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -820,6 +847,17 @@ struct AccountRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var quotaResetText: String? {
+        var parts: [String] = []
+        if let primaryReset = account.usage?.primaryResetText {
+            parts.append("5h \(primaryReset)")
+        }
+        if let weeklyReset = account.usage?.weeklyResetText {
+            parts.append("\(L10n.isChinese ? "周" : "week") \(weeklyReset)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
 }
@@ -963,6 +1001,8 @@ private extension AccountUsage {
 
 struct PlanBreakdownView: View {
     let breakdown: [PlanBreakdown]
+    let showsPrimary: Bool
+    let showsWeekly: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -970,7 +1010,7 @@ struct PlanBreakdownView: View {
                 HStack(spacing: 6) {
                     PlanDot(planType: item.planType)
                     Text("\(PlanType.displayName(item.planType)) x\(item.count)")
-                    Text(L10n.isChinese ? "5h \(formatPercent(item.primaryWeightedPercent))% · 周 \(formatPercent(item.weightedPercent))%" : "5h \(formatPercent(item.primaryWeightedPercent))% · W \(formatPercent(item.weightedPercent))%")
+                    Text(quotaText(for: item))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -984,13 +1024,26 @@ struct PlanBreakdownView: View {
     private func formatPercent(_ value: Double) -> String {
         String(format: "%.0f", value)
     }
+
+    private func quotaText(for item: PlanBreakdown) -> String {
+        var parts: [String] = []
+        if showsPrimary {
+            parts.append("5h \(formatPercent(item.primaryWeightedPercent))%")
+        }
+        if showsWeekly {
+            parts.append("\(L10n.isChinese ? "周" : "W") \(formatPercent(item.weightedPercent))%")
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
 struct BalanceStack: View {
+    let showsPrimary: Bool
     let primaryText: String
     let primaryValue: Double
     let primaryTotal: Double
     let primaryHint: QuotaResetHint?
+    let showsWeekly: Bool
     let weeklyText: String
     let weeklyValue: Double
     let weeklyTotal: Double
@@ -998,20 +1051,24 @@ struct BalanceStack: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            BalanceLine(
-                label: "5h",
-                valueText: primaryText,
-                value: primaryValue,
-                total: primaryTotal,
-                hint: primaryHint
-            )
-            BalanceLine(
-                label: L10n.text("Week", "周"),
-                valueText: weeklyText,
-                value: weeklyValue,
-                total: weeklyTotal,
-                hint: weeklyHint
-            )
+            if showsPrimary {
+                BalanceLine(
+                    label: "5h",
+                    valueText: primaryText,
+                    value: primaryValue,
+                    total: primaryTotal,
+                    hint: primaryHint
+                )
+            }
+            if showsWeekly {
+                BalanceLine(
+                    label: L10n.text("Week", "周"),
+                    valueText: weeklyText,
+                    value: weeklyValue,
+                    total: weeklyTotal,
+                    hint: weeklyHint
+                )
+            }
         }
     }
 }
@@ -1066,13 +1123,17 @@ struct UsageStack: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 5) {
-            UsageLine(
-                label: "5h",
-                remainingPercent: account.usage?.primaryRemainingPercent,
-                text: account.isWeekKilled ? "weekKILL" : account.effectivePrimaryCompactText,
-                isMuted: account.isWeekKilled
-            )
-            UsageLine(label: "Week", remainingPercent: account.effectiveWeeklyRemainingPercent, text: account.effectiveWeeklyCompactText)
+            if account.usage?.primaryRemainingPercent != nil {
+                UsageLine(
+                    label: "5h",
+                    remainingPercent: account.usage?.primaryRemainingPercent,
+                    text: account.isWeekKilled ? "weekKILL" : account.effectivePrimaryCompactText,
+                    isMuted: account.isWeekKilled
+                )
+            }
+            if account.usage?.weeklyRemainingPercent != nil {
+                UsageLine(label: "Week", remainingPercent: account.effectiveWeeklyRemainingPercent, text: account.effectiveWeeklyCompactText)
+            }
         }
     }
 }

@@ -472,22 +472,24 @@ struct UsageSnapshot: Codable, Hashable {
         primaryUsedPercent != nil ||
         primaryResetSeconds != nil ||
         weeklyUsedPercent != nil ||
-        weeklyResetSeconds != nil ||
-        planType != nil
+        weeklyResetSeconds != nil
     }
 
     var weeklyRemainingPercent: Double? {
         guard let weeklyUsedPercent else {
-            return remaining
+            return nil
         }
         return max(0, min(100, 100 - weeklyUsedPercent))
     }
 
     var primaryRemainingPercent: Double? {
-        guard let primaryUsedPercent = primaryUsedPercent ?? usedPercent else {
-            return remaining
+        if let primaryUsedPercent = primaryUsedPercent ?? usedPercent {
+            return max(0, min(100, 100 - primaryUsedPercent))
         }
-        return max(0, min(100, 100 - primaryUsedPercent))
+        if let remaining, let limit, limit > 0 {
+            return max(0, min(100, remaining / limit * 100))
+        }
+        return remaining.map { max(0, min(100, $0)) }
     }
 
     var primaryCompactText: String {
@@ -835,6 +837,14 @@ struct PoolSummary: Codable, Hashable {
 
     var primaryRemainingPercent: Double {
         primaryRemainingUnits * 100
+    }
+
+    var hasPrimaryQuota: Bool {
+        primaryCapacityUnits > 0
+    }
+
+    var hasWeeklyQuota: Bool {
+        weeklyCapacityUnits > 0
     }
 
     static let placeholder = PoolSummary(

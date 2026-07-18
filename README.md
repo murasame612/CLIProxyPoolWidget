@@ -131,7 +131,7 @@ hdiutil create \
   -srcfolder .build/DerivedData/Build/Products/Release/CLIProxyPoolWidget.app \
   -ov \
   -format UDZO \
-  dist/CLIProxyPoolWidget-0.2.4.dmg
+  dist/CLIProxyPoolWidget-0.4.1.dmg
 ```
 
 The app bundle does not include a locally configured Management key by default. The key is stored at runtime in macOS user defaults on the user's machine.
@@ -332,7 +332,7 @@ hdiutil create \
   -srcfolder .build/DerivedData/Build/Products/Release/CLIProxyPoolWidget.app \
   -ov \
   -format UDZO \
-  dist/CLIProxyPoolWidget-0.2.4.dmg
+  dist/CLIProxyPoolWidget-0.4.1.dmg
 ```
 
 默认情况下，app bundle 不会包含本地配置过的 Management key。key 是用户运行应用后保存在自己 Mac 的 user defaults 里。

@@ -366,7 +366,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget;
 				PRODUCT_NAME = CLIProxyPoolWidget;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -388,7 +388,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget;
 				PRODUCT_NAME = CLIProxyPoolWidget;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -407,7 +407,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget.WidgetExtension;
 				PRODUCT_NAME = CLIProxyPoolWidgetExtension;
 				SKIP_INSTALL = YES;
@@ -427,7 +427,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zipwuu.CLIProxyPoolWidget.WidgetExtension;
 				PRODUCT_NAME = CLIProxyPoolWidgetExtension;
 				SKIP_INSTALL = YES;

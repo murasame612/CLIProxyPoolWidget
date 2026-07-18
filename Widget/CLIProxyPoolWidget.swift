@@ -185,26 +185,32 @@ struct MediumPoolView: View {
                 WidgetXiaomiTokenPlanView(snapshot: tokenPlan, compact: false)
             } else {
                 HStack(alignment: .center, spacing: 8) {
-                    WidgetQuotaRing(
-                        title: "5h",
-                        centerText: "\(formatPercent(summary.primaryCapacityRelativeRemainingPercent))%",
-                        detailText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
-                        value: summary.primaryRemainingUnits,
-                        total: max(summary.primaryCapacityUnits, 1),
-                        color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent)
-                    )
+                    Spacer(minLength: 0)
+                    if summary.hasPrimaryQuota {
+                        WidgetQuotaRing(
+                            title: "5h",
+                            centerText: "\(formatPercent(summary.primaryCapacityRelativeRemainingPercent))%",
+                            detailText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
+                            value: summary.primaryRemainingUnits,
+                            total: max(summary.primaryCapacityUnits, 1),
+                            color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent)
+                        )
+                    }
 
                     WidgetRestoreCenter(summary: summary)
                         .frame(width: 112)
 
-                    WidgetQuotaRing(
-                        title: "Week",
-                        centerText: "\(formatPercent(summary.capacityRelativeRemainingPercent))%",
-                        detailText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
-                        value: summary.weeklyRemainingUnits,
-                        total: max(summary.weeklyCapacityUnits, 1),
-                        color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent)
-                    )
+                    if summary.hasWeeklyQuota {
+                        WidgetQuotaRing(
+                            title: "Week",
+                            centerText: "\(formatPercent(summary.capacityRelativeRemainingPercent))%",
+                            detailText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
+                            value: summary.weeklyRemainingUnits,
+                            total: max(summary.weeklyCapacityUnits, 1),
+                            color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent)
+                        )
+                    }
+                    Spacer(minLength: 0)
                 }
             }
 
@@ -270,16 +276,20 @@ struct WidgetRestoreCenter: View {
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
 
-            WidgetRestoreLine(
-                title: "5h",
-                hint: summary.nextPrimaryResetHint,
-                color: Color(red: 0.22, green: 0.72, blue: 0.95)
-            )
-            WidgetRestoreLine(
-                title: "Week",
-                hint: summary.nextWeeklyResetHint,
-                color: Color(red: 0.72, green: 0.52, blue: 0.95)
-            )
+            if summary.hasPrimaryQuota {
+                WidgetRestoreLine(
+                    title: "5h",
+                    hint: summary.nextPrimaryResetHint,
+                    color: Color(red: 0.22, green: 0.72, blue: 0.95)
+                )
+            }
+            if summary.hasWeeklyQuota {
+                WidgetRestoreLine(
+                    title: "Week",
+                    hint: summary.nextWeeklyResetHint,
+                    color: Color(red: 0.72, green: 0.52, blue: 0.95)
+                )
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
@@ -325,13 +335,12 @@ struct LargePoolView: View {
                 WidgetXiaomiTokenPlanView(snapshot: tokenPlan, compact: false)
             }
             if summary.totalAccounts > 0 {
-                HStack(spacing: 12) {
-                    StatPill(title: "5h", value: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%", color: WidgetUsageColor.color(forRemainingPercent: summary.primaryCapacityRelativeRemainingPercent))
-                    StatPill(title: "Week", value: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%", color: WidgetUsageColor.color(forRemainingPercent: summary.capacityRelativeRemainingPercent))
-                    StatPill(title: "Ready", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", color: .green)
-                }
                 WidgetBalanceStack(summary: summary, compact: false)
-                WidgetPlanBreakdownView(breakdown: summary.planBreakdown)
+                WidgetPlanBreakdownView(
+                    breakdown: summary.planBreakdown,
+                    showsPrimary: summary.hasPrimaryQuota,
+                    showsWeekly: summary.hasWeeklyQuota
+                )
                 WidgetHealthOverview(summary: summary, compact: false)
             }
             Spacer(minLength: 0)
@@ -449,13 +458,17 @@ struct AccountList: View {
                     }
                     Spacer(minLength: 6)
                     VStack(alignment: .trailing, spacing: 3) {
-                        WidgetUsageLine(
-                            label: "5h",
-                            remainingPercent: account.usage?.primaryRemainingPercent,
-                            text: account.isWeekKilled ? "weekKILL" : account.effectivePrimaryCompactText,
-                            isMuted: account.isWeekKilled
-                        )
-                        WidgetUsageLine(label: "Week", remainingPercent: account.effectiveWeeklyRemainingPercent, text: account.effectiveWeeklyCompactText)
+                        if account.usage?.primaryRemainingPercent != nil {
+                            WidgetUsageLine(
+                                label: "5h",
+                                remainingPercent: account.usage?.primaryRemainingPercent,
+                                text: account.isWeekKilled ? "weekKILL" : account.effectivePrimaryCompactText,
+                                isMuted: account.isWeekKilled
+                            )
+                        }
+                        if account.usage?.weeklyRemainingPercent != nil {
+                            WidgetUsageLine(label: "Week", remainingPercent: account.effectiveWeeklyRemainingPercent, text: account.effectiveWeeklyCompactText)
+                        }
                     }
                 }
             }
@@ -471,33 +484,15 @@ struct WidgetHealthOverview: View {
         summary.recentRequests.reduce(0) { $0 + $1.failed }
     }
 
-    private var successCount: Int {
-        summary.recentRequests.reduce(0) { $0 + $1.success }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 8) {
             HStack(spacing: 8) {
                 Label("Health", systemImage: failedCount > 0 ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
                     .font((compact ? Font.caption2 : Font.caption).weight(.bold))
                     .foregroundStyle(failedCount > 0 ? .orange : .green)
-                Spacer(minLength: 4)
-                Text("\(successCount) ok / \(failedCount) failed")
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
 
             WidgetHealthTimeline(buckets: summary.recentRequests, compact: compact)
-
-            if !compact {
-                HStack(spacing: 8) {
-                    HealthStat(title: "Ready", value: "\(summary.availableAccounts)/\(summary.totalAccounts)", color: .green)
-                    HealthStat(title: "Cooling", value: "\(summary.coolingAccounts)", color: .orange)
-                    HealthStat(title: "Failed", value: "\(summary.failedRecentRequests)", color: .red)
-                }
-            }
         }
         .padding(compact ? 8 : 10)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
@@ -548,26 +543,10 @@ struct WidgetHealthTimeline: View {
     }
 }
 
-struct HealthStat: View {
-    let title: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.caption.weight(.bold).monospacedDigit())
-                .foregroundStyle(color)
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 struct WidgetPlanBreakdownView: View {
     let breakdown: [PlanBreakdown]
+    let showsPrimary: Bool
+    let showsWeekly: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -576,7 +555,7 @@ struct WidgetPlanBreakdownView: View {
                     WidgetPlanDot(planType: item.planType)
                     Text("\(PlanType.displayName(item.planType)) x\(item.count)")
                         .lineLimit(1)
-                    Text("5h \(formatPercent(item.primaryWeightedPercent))%")
+                    Text(quotaText(for: item))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -589,6 +568,17 @@ struct WidgetPlanBreakdownView: View {
     private func formatPercent(_ value: Double) -> String {
         String(format: "%.0f", value)
     }
+
+    private func quotaText(for item: PlanBreakdown) -> String {
+        var parts: [String] = []
+        if showsPrimary {
+            parts.append("5h \(formatPercent(item.primaryWeightedPercent))%")
+        }
+        if showsWeekly {
+            parts.append("W \(formatPercent(item.weightedPercent))%")
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
 struct WidgetBalanceStack: View {
@@ -597,24 +587,28 @@ struct WidgetBalanceStack: View {
 
     var body: some View {
         VStack(spacing: compact ? 7 : 8) {
-            WidgetBalanceLine(
-                label: "5h",
-                color: Color(red: 0.22, green: 0.72, blue: 0.95),
-                valueText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
-                value: summary.primaryRemainingUnits,
-                total: max(summary.primaryCapacityUnits, 1),
-                hint: summary.nextPrimaryResetHint,
-                compact: compact
-            )
-            WidgetBalanceLine(
-                label: "Week",
-                color: Color(red: 0.72, green: 0.52, blue: 0.95),
-                valueText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
-                value: summary.weeklyRemainingUnits,
-                total: max(summary.weeklyCapacityUnits, 1),
-                hint: summary.nextWeeklyResetHint,
-                compact: compact
-            )
+            if summary.hasPrimaryQuota {
+                WidgetBalanceLine(
+                    label: "5h",
+                    color: Color(red: 0.22, green: 0.72, blue: 0.95),
+                    valueText: "\(formatPercent(summary.primaryRemainingPercent))/\(formatPercent(summary.primaryCapacityPercent))%",
+                    value: summary.primaryRemainingUnits,
+                    total: max(summary.primaryCapacityUnits, 1),
+                    hint: summary.nextPrimaryResetHint,
+                    compact: compact
+                )
+            }
+            if summary.hasWeeklyQuota {
+                WidgetBalanceLine(
+                    label: "Week",
+                    color: Color(red: 0.72, green: 0.52, blue: 0.95),
+                    valueText: "\(formatPercent(summary.weeklyRemainingPercent))/\(formatPercent(summary.weeklyCapacityPercent))%",
+                    value: summary.weeklyRemainingUnits,
+                    total: max(summary.weeklyCapacityUnits, 1),
+                    hint: summary.nextWeeklyResetHint,
+                    compact: compact
+                )
+            }
         }
     }
 
@@ -637,21 +631,46 @@ struct WidgetBalanceLine: View {
     }
 
     var body: some View {
-        HStack(spacing: compact ? 6 : 8) {
-            Text(label)
-                .font((compact ? Font.caption2 : Font.caption).weight(.bold))
-                .foregroundStyle(.secondary)
-                .frame(width: compact ? 28 : 42, alignment: .leading)
-            WidgetBalanceBar(value: value, total: total, hint: hint, restoreColor: color, compact: compact)
-                .frame(width: compact ? 35 : nil)
-            WidgetResetHintText(hint: hint, color: color, compact: compact)
-            Text(valueText)
-                .font((compact ? Font.caption2 : Font.caption).weight(.bold).monospacedDigit())
-                .foregroundStyle(WidgetUsageColor.color(forRemainingPercent: ratio * 100))
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-                .frame(width: compact ? 55 : 90, alignment: .trailing)
+        if compact {
+            HStack(spacing: 6) {
+                labelText
+                    .frame(width: 28, alignment: .leading)
+                WidgetBalanceBar(value: value, total: total, hint: hint, restoreColor: color, compact: compact)
+                    .frame(width: 35)
+                WidgetResetHintText(hint: hint, color: color, compact: compact)
+                valueLabel
+                    .frame(width: 55, alignment: .trailing)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    labelText
+                        .frame(width: 42, alignment: .leading)
+                    WidgetBalanceBar(value: value, total: total, hint: hint, restoreColor: color, compact: compact)
+                }
+                HStack(spacing: 8) {
+                    Color.clear
+                        .frame(width: 42)
+                    WidgetResetHintText(hint: hint, color: color, compact: compact)
+                    Spacer(minLength: 8)
+                    valueLabel
+                }
+            }
         }
+    }
+
+    private var labelText: some View {
+        Text(label)
+            .font((compact ? Font.caption2 : Font.caption).weight(.bold))
+            .foregroundStyle(.secondary)
+    }
+
+    private var valueLabel: some View {
+        Text(valueText)
+            .font((compact ? Font.caption2 : Font.caption).weight(.bold).monospacedDigit())
+            .foregroundStyle(WidgetUsageColor.color(forRemainingPercent: ratio * 100))
+            .lineLimit(1)
+            .minimumScaleFactor(0.55)
     }
 }
 
@@ -712,9 +731,11 @@ struct WidgetBalanceBar: View {
                         .fill(restoreColor.opacity(0.62))
                         .frame(width: max(8, targetWidth))
                 }
-                Capsule()
-                    .fill(WidgetUsageColor.color(forRemainingPercent: ratio * 100))
-                    .frame(width: max(8, currentWidth))
+                if currentWidth > 0.5 {
+                    Capsule()
+                        .fill(WidgetUsageColor.color(forRemainingPercent: ratio * 100))
+                        .frame(width: max(8, currentWidth))
+                }
             }
             .clipShape(Capsule())
         }
@@ -761,9 +782,12 @@ struct WidgetMiniBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.quaternary)
-                Capsule()
-                    .fill(isMuted ? Color.secondary.opacity(0.45) : WidgetUsageColor.color(forRemainingPercent: value))
-                    .frame(width: max(4, proxy.size.width * value / 100))
+                let fillWidth = proxy.size.width * value / 100
+                if fillWidth > 0.5 {
+                    Capsule()
+                        .fill(isMuted ? Color.secondary.opacity(0.45) : WidgetUsageColor.color(forRemainingPercent: value))
+                        .frame(width: max(4, fillWidth))
+                }
             }
         }
         .frame(width: 42, height: 5)
@@ -832,25 +856,6 @@ extension PoolSummary {
             return 0
         }
         return max(0, min(100, weeklyRemainingUnits / weeklyCapacityUnits * 100))
-    }
-}
-
-struct StatPill: View {
-    let title: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value)
-                .font(.headline.monospacedDigit())
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
